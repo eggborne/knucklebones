@@ -53,8 +53,8 @@ table {
 	--game-bg-color: #071c08;
 	--opponent-area-bg-color: #4e4e2f;
 	--player-area-bg-color: #223b3b;
-	--header-height: calc(var(--actual-height) / 24);
-	--footer-height: calc(var(--actual-height) / 24);
+	--header-height: calc(var(--actual-height) / 18);
+	--footer-height: calc(var(--actual-height) / 18);
 	--turn-area-height: calc((var(--actual-height) - var(--header-height) - var(--footer-height)) / 2 );
 	--die-lane-width: calc(var(--turn-area-height) / 4.75);
 	--die-size: calc(var(--die-lane-width) * 0.8);
@@ -250,7 +250,7 @@ header, footer {
 	color: rgb(72, 72, 72);
 	background: rgb(63, 39, 39);
 	padding: 0 calc(var(--header-height) / 4);
-	z-index: 12;
+	z-index: 1;
 }
 
 header {
@@ -265,13 +265,31 @@ footer {
 }
 
 .modal {
-	position: fixed;	
-	max-width: 100%;	
+	position: fixed;
+	top: var(--header-height);
+	width: 100%;	
+	height: calc(var(--actual-height) - var(--header-height));
 	display: flex;
 	flex-direction: column;
 	justify-content: space-between;
 	align-items: center;
 	transition: opacity 300ms ease;
+	z-index: 2;
+}
+#lobby-screen {
+	background-color: #111;
+	color: rgb(128, 145, 128);
+	display: none;
+}
+#user-list {
+	background-color: rgb(57, 45, 45);
+	height: 30%;
+	width: 100%;
+}
+#chat-area {
+	background-color: rgb(75, 109, 103);
+	height: 30%;
+	width: 100%;
 }
 
 @keyframes pulseborder {

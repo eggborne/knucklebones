@@ -27,7 +27,6 @@ if (!fscreen.fullscreenEnabled || fscreen.fullscreenElement !== null) {
 };
 
 const initialHeight = window.innerHeight;
-let gameScreenHeight, gameScreenWidth, gameScreenX, gameScreenY, pixelUnit;
 
 
 function detectScreen() {
@@ -53,6 +52,9 @@ const game = {
   },
   currentTurn: undefined
 };
+const playerState = {
+  status: 'lobby'
+}
 let currentDieID = 0;
 
 function assignHandlers() {
@@ -80,7 +82,6 @@ function assignHandlers() {
   // document.getElementById('game-height-slider').addEventListener('change', storeUserState);
 
   // let laneElements = [...document.querySelectorAll('.die-lane')];
-  // console.log('laneElements', laneElements);
   // for (let lane in laneElements) {
   //   let element = laneElements[lane];
   //   if (element.classList.contains('opponent')) {
@@ -117,6 +118,8 @@ function assignHandlers() {
   document.querySelector('#opponent-area .new-die-box').addEventListener('pointerdown', () => { 
     dealDie('opponent', randomInt(1, 6));
   });
+
+  document.querySelector('#header').addEventListener('pointerdown', () => {populateUserList()} );
   
   // document.getElementById('message').addEventListener('click', () => {
   //   localStorage.clear();
@@ -125,13 +128,26 @@ function assignHandlers() {
   // });
 }
 
+async function populateUserList() {
+  document.querySelector('#user-list').innerHTML = 'Players <br />';
+  let userList = await getUsersFromDatabase();
+  let nowInSeconds = Math.round(Date.now() / 1000);
+  userList.forEach((user) => {
+    let lastSeen = nowInSeconds - parseInt(user.lastPing);
+    document.querySelector('#user-list').innerHTML += `
+     <br />
+      ${user.userName} #${user.visitorID} ${user.status} ${lastSeen} seconds ago
+    `;
+  });
+}
+
 const userPreferences = {
   animationSpeed: 300
 }
 
 document.documentElement.style.setProperty('--die-animation-speed', userPreferences.animationSpeed + 'ms');
 
-export function init() {
+export async function init() {
   detectScreen();
   assignHandlers();
   let knownUser = localStorage.getItem('kbones-prefs');
@@ -142,7 +158,32 @@ export function init() {
   }  
   window.onresize = function () {    
     detectScreen();
-  };  
+  };
+
+  let enteredName = 'Dildo';
+  game.player.userName = enteredName;
+  document.querySelector('#player-name').innerHTML = enteredName;
+  const firstShakeData = {
+    userName: enteredName,
+    status: 'lobby'
+  }
+  const visitorID = await handshake(JSON.stringify(firstShakeData));
+  playerState.visitorID = visitorID;
+  console.warn('established new user #' + visitorID)
+  setTimeout(async () => {
+    console.warn('shaking...');
+    let updateShake = {
+      status: playerState.status,
+      visitorID: playerState.visitorID
+    };
+    let startedShakeAt = Date.now();
+    await handshake(JSON.stringify(updateShake));
+    let shakeTime = Date.now() - startedShakeAt;
+    console.warn('took', shakeTime)
+  }, 1000);
+
+
+
   // dealDie('player', randomInt(1, 6));
   // addDieToLane('player', 4, 1);
   // addDieToLane('player', 5, 2);
@@ -164,8 +205,6 @@ function validateName(e) {
 
 class Die {
   constructor(denomination, targetDivQuery, lane) {
-    console.log('calling new Die() in lane', lane);
-    console.log(denomination, targetDivQuery);
     this.denomination = denomination;
     this.lane;
     this.elementID = 'die-' + currentDieID;
@@ -327,8 +366,6 @@ function printLaneTotal(contestant, lane) {
   let laneTotal;
   let uniqueArray = [...new Set(laneArray)];
   let uniqueValues = uniqueArray.length;
-  console.log('laneArray', laneArray);
-  console.log('uniqueArray', uniqueArray);
   if (uniqueValues === laneArray.length) { // all different or only one
     laneTotal = laneArray.reduce((a, b) => a + b);
   } else { // more than one and not all unique
@@ -383,7 +420,6 @@ function updateContestantScore(contestant) {
 function colorMatchingDice(contestant) {
   const allActiveDice = game.activeDice[contestant];
   const organizedDice = [[], [], []];
-  console.log('ACTIVE DICE', allActiveDice);
   allActiveDice.forEach((die) => {
     if (organizedDice[die.lane].indexOf(die.denomination) === -1) {
       organizedDice[die.lane].push(die.denomination);
@@ -474,25 +510,35 @@ function randomInt(min, max) {
 //   highScores = [...scoreArray];
 //   return scoreArray;
 // }
+async function getUsersFromDatabase() {
+  console.warn('CALLING getUsersFromDatabase');
+  let calledAt = Date.now();
+  let response = await axios({
+    method: 'get',
+    url: 'https://mikedonovan.dev/kbones/php/getusers.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    }
+  });
+  const usersArray = [...response.data];
+  usersArray.forEach((row, i, self) => {
+    self[i] = JSON.parse(row)
+  });
+  console.warn('got', usersArray.length, 'users in', Date.now() - calledAt);
+  return usersArray;
+}
 
-// async function saveScoreToDatabase(gameName, playerName, playerScore) {
-//   playerName = playerName.toUpperCase();
-//   let calledAt = Date.now();
-//   const scoreID = await axios({
-//     method: 'post',
-//     url: 'https://mikedonovan.dev/csskaboom/php/savescore.php',
-//     headers: {
-//       'Content-type': 'application/x-www-form-urlencoded',
-//     },
-//     data: {
-//       game: gameName,
-//       name: playerName,
-//       score: playerScore,
-//     },
-//   });
-//   userData.scoreIDs.push(scoreID.data);
-//   storeUserState();
-//   console.warn('saved score in', Date.now() - calledAt);
-// }
+async function handshake(shakeData) {
+  const shakeResult = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/handshake.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: shakeData,
+  });
+  console.warn(shakeResult.data);
+  return shakeResult.data
+}
 
 init();

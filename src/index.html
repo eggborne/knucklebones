@@ -19,13 +19,18 @@
   </head>
   <body style='opacity: 0'>
     <main id='main'>
-      <header>
+      <header id="header">
         Knucklebones
       </header>
+      <div id="lobby-screen" class="modal">
+        LOBBY
+        <div id="user-list">Players</div>
+        <div id="chat-area">Chat</div>
+      </div>
       <div id='game-area'>
         <div id='opponent-area' class="turn-area">
           <div class="name-score-area">
-            <div class="contestant-info">Opponent</div>
+            <div class="contestant-info"><div id='opponent-name'>Opponent</div></div>
             <div class="new-die-box"></div>
             <div class="contestant-score">0</div>
           </div>
@@ -52,7 +57,7 @@
             </div>
           </div>
           <div class="name-score-area">
-            <div class="contestant-info">Player</div>
+            <div class="contestant-info"><div id='player-name'>Player</div></div>
             <div class="new-die-box"></div>
             <div class="contestant-score">0</div>
           </div>
@@ -62,6 +67,6 @@
         footer
       </footer>
     </main>
-    <div id='debug'>DEBUG</div>
+    <div id='debug'>DEV MODE</div>
   </body>
 </html>
