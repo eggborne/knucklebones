@@ -1,0 +1,309 @@
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: 100%;
+	font: inherit;
+	vertical-align: baseline;
+	box-sizing: border-box;
+}
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure, 
+footer, header, hgroup, menu, nav, section {
+	display: block;
+}
+body {
+	line-height: 1;
+}
+ol, ul {
+	list-style: none;
+}
+blockquote, q {
+	quotes: none;
+}
+blockquote:before, blockquote:after,
+q:before, q:after {
+	content: '';
+	content: none;
+}
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+}
+
+/* game screen is always horizontally centered */
+/* portrait = pixel size based on game screen width x*/
+/* landscape = pixel size based on game screen height */
+
+:root {
+	--actual-height: 100vh;
+	--play-area-width: 100vw;
+	--game-bg-color: #071c08;
+	--opponent-area-bg-color: #4e4e2f;
+	--player-area-bg-color: #223b3b;
+	--header-height: calc(var(--actual-height) / 24);
+	--footer-height: calc(var(--actual-height) / 24);
+	--turn-area-height: calc((var(--actual-height) - var(--header-height) - var(--footer-height)) / 2 );
+	--die-lane-width: calc(var(--turn-area-height) / 4.75);
+	--die-size: calc(var(--die-lane-width) * 0.8);
+	--die-animation-speed: 300ms;
+	--border-width: calc(var(--die-size) / 24);
+}
+
+body {
+	font-display: swap;
+	/* font-family: 'Press Start 2P', sans-serif; */
+	font-family: sans-serif;
+	font-size: calc(var(--die-lane-width) / 5.5);
+	color: white;
+  width: 100%;
+	max-width: 100%;
+	height: var(--actual-height);
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: -moz-none;
+	-o-user-select: none;
+	user-select: none;
+	overflow: hidden;
+	overscroll-behavior: contain;
+	background-color: black;
+	transition: opacity 600ms ease;
+}
+main {
+	display: flex;
+	width: 100%;
+	height: var(--actual-height);
+	flex-direction: column;
+}
+#game-area {
+	flex: 1;
+	background-color: var(--game-bg-color);
+}
+
+.turn-area {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-around;
+	height: var(--turn-area-height);	
+}
+#opponent-area {
+	background-color: var(--opponent-area-bg-color);
+}
+#player-area {
+	background-color: var(--player-area-bg-color);
+}
+
+.die-area {
+	width: calc((var(--die-lane-width) * 3) + (var(--border-width) * 6));
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	column-gap: calc(var(--border-width) * 2);
+	grid-template-rows: calc(var(--die-lane-width) / 3) 1fr;
+}
+#player-area .die-area {
+	grid-template-rows: 1fr calc(var(--die-lane-width) / 3);
+}
+.die-lane {
+	height: calc((var(--die-lane-width) * 3) * 0.95);
+	border: var(--border-width) solid green;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	transition: all 200ms ease;
+	position: relative;
+	pointer-events: none;
+}
+.die-lane::before {
+	opacity: 0;
+	content: '';
+	background-color: salmon;
+	width: var(--die-lane-width);
+	position: absolute;
+	height: 100%;
+	width: 100%;
+	box-sizing: border-box;
+	transition: opacity 300ms ease;
+}
+.die-lane.available {
+	pointer-events: unset;
+}
+.die-lane.available::before {
+	animation-duration: 500ms;
+  animation-name: pulse;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+#opponent-area .die-lane {
+	justify-content: end;
+	flex-direction: column-reverse;
+	grid-row-start: 2;
+}
+#player-area .die-lane {
+	justify-content: start;
+}
+.die-lane-total-area {
+	width: 100%;
+	height: 100%;
+	grid-column-end: span 3;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.die-lane-total {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.name-score-area {
+	width: var(--play-area-width);
+	display: flex;
+	justify-content: space-around;
+}
+.contestant-info, .contestant-score {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.new-die-box, .contestant-info, .contestant-score {
+	height: var(--die-lane-width);
+	width: var(--die-lane-width);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.contestant-score {
+	font-size: calc(var(--die-lane-width) / 2)
+}
+.new-die-box {
+	border: 2px solid #444;
+}
+.die {
+	height: var(--die-size);
+	width: var(--die-size);
+	background-color: white;
+	border-radius: calc(var(--die-lane-width) * 0.1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	scale: 0;
+	filter: drop-shadow(0 0 calc(var(--border-width) * 3) rgba(0, 0, 0, 0.35));
+	transition: scale var(--die-animation-speed), background-color 100ms ease;
+}
+.die.doubled {
+	background-color: rgb(243, 250, 114);
+}
+.die.tripled {
+	background-color: rgb(255, 149, 137);
+}
+.die.showing {
+	scale: 1;
+}
+.die-dot-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	grid-template-rows: 1fr 1fr 1fr;
+	justify-items: center;
+	align-items: center;
+}
+.die-dot {
+	visibility: hidden;
+	border-radius: 50%;
+	height: calc(var(--die-size) / 4.5);
+	width: calc(var(--die-size) / 4.5);
+	margin: calc(var(--die-size) * 0.025);
+}
+.die-dot.filled {
+	visibility: visible;
+	background-color: black;
+}
+
+#opponent-die-grid .die {
+	margin-bottom: calc(var(--die-lane-width) * 0.1);
+}
+#player-die-grid .die {
+	margin-top: calc(var(--die-lane-width) * 0.1);
+}
+
+header, footer {
+	top: 0;
+	left: 0;
+	width: 100vw;
+	font-family: sans-serif;
+	display: flex;
+	justify-content: space-between;
+	box-sizing: border-box;
+	align-items: center;
+	color: rgb(72, 72, 72);
+	background: rgb(63, 39, 39);
+	padding: 0 calc(var(--header-height) / 4);
+	z-index: 12;
+}
+
+header {
+	height: var(--header-height);
+	color: #ddd;
+}
+
+footer {
+	height: var(--footer-height);
+	top: unset;
+	bottom: 0;
+}
+
+.modal {
+	position: fixed;	
+	max-width: 100%;	
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: center;
+	transition: opacity 300ms ease;
+}
+
+@keyframes pulseborder {
+  from {
+    border: var(--border-width) solid green;
+  }
+
+  to {
+    border: calc(var(--border-width) * 1.5) solid salmon;
+  }
+}
+@keyframes pulse {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.1;
+  }
+}
+
+
+@media (orientation: landscape) {
+
+}
+
+#debug {
+	position: fixed;
+	bottom: 0;
+	right: 0;
+	z-index: 12;
+	font-family: sans-serif;
+	font-size: 10pt;
+	opacity: 0.5;
+	display: none;
+}

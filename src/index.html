@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Knucklebones</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="mask-icon" href="safari-pinned-tab.svg" color="#477323">
+    <meta name="msapplication-TileColor" content="#477323">
+    <meta name="theme-color" content="#848483">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik+Mono+One&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  </head>
+  <body style='opacity: 0'>
+    <main id='main'>
+      <header>
+        Knucklebones
+      </header>
+      <div id='game-area'>
+        <div id='opponent-area' class="turn-area">
+          <div class="name-score-area">
+            <div class="contestant-info">Opponent</div>
+            <div class="new-die-box"></div>
+            <div class="contestant-score">0</div>
+          </div>
+          <div id="opponent-die-grid" class="die-area">
+            <div class="die-lane lane-0"></div>
+            <div class="die-lane lane-1"></div>
+            <div class="die-lane lane-2"></div>
+            <div class="die-lane-total-area">
+              <div class="die-lane-total">0</div>
+              <div class="die-lane-total">0</div>
+              <div class="die-lane-total">0</div>
+            </div>
+          </div>
+        </div>
+        <div id='player-area' class="turn-area">
+          <div id="player-die-grid" class="die-area">
+            <div class="die-lane lane-0"></div>
+            <div class="die-lane lane-1"></div>
+            <div class="die-lane lane-2"></div>
+            <div class="die-lane-total-area">
+              <div class="die-lane-total">0</div>
+              <div class="die-lane-total">0</div>
+              <div class="die-lane-total">0</div>
+            </div>
+          </div>
+          <div class="name-score-area">
+            <div class="contestant-info">Player</div>
+            <div class="new-die-box"></div>
+            <div class="contestant-score">0</div>
+          </div>
+        </div>
+      </div>
+      <footer id="footer">
+        footer
+      </footer>
+    </main>
+    <div id='debug'>DEBUG</div>
+  </body>
+</html>
