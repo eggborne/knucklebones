@@ -21,11 +21,36 @@
     <main id='main'>
       <header id="header">
         Knucklebones
+        <button id="clear-cookies-button">clear local storage</button>
       </header>
+      <div id="name-entry-screen">
+        <div id="known-user-confirmation">
+          
+        </div>
+        <input id="name-entry-field" type="text" placeholder="Enter a name"></input>
+        <button disabled id="enter-lobby-button">Go to Lobby</button>
+      </div>
       <div id="lobby-screen" class="modal">
-        LOBBY
-        <div id="user-list">Players</div>
-        <div id="chat-area">Chat</div>
+        <div id="chat-area">
+          <div id="lobby-chat-window"></div>
+          <div id="chat-entry-area">
+            <input id="lobby-chat-field" placeholder="Type message..."></input>
+            <button type="button" id="chat-submit-button">Send</button>
+          </div>
+        </div>
+        <div id="user-list-area">
+          <div>Players online</div>
+          <div id="user-column-labels">
+            <div>Name</div>
+            <div>ID</div>
+            <div>Status</div>
+            <div>Last pinged</div>
+          </div>
+          <div id="user-list"></div>
+        </div>
+        <div id="lobby-control-panel">
+          <button id="toggle-ready-button">Find Game</button>
+        </div>
       </div>
       <div id='game-area'>
         <div id='opponent-area' class="turn-area">
@@ -64,9 +89,9 @@
         </div>
       </div>
       <footer id="footer">
-        footer
+        RESET
       </footer>
     </main>
-    <div id='debug'>DEV MODE</div>
+    <div id='debug'></div>
   </body>
 </html>
