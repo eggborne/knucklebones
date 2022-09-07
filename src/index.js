@@ -1,6 +1,7 @@
 import './css/style.css';
 import fscreen from 'fscreen';
 const axios = require('axios');
+require('console-green');
 // console.log('node env', process.env.NODE_ENV);
 // if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
 //   window.addEventListener('load', () => {
@@ -20,10 +21,16 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 window.onload = async () => {
+  detectScreen();
   document.body.style.opacity = 1;
   populateUserList();
   await printLobbyMessages(10);
   document.querySelector('#lobby-chat-window').style.setProperty('scroll-behavior', 'smooth');
+  await pause(50);
+  document.querySelector('#title-legend').classList.add('showing');
+  await pause(600);
+  document.querySelector('#title-legend').classList.add('animating');
+
 };
 
 // don't show full screen button if user can't or already is from PWA
@@ -39,7 +46,8 @@ function detectScreen() {
 
 const game = {
   opponent: {
-    userName: 'Opponent',
+    userName: undefined,
+    visitorID: undefined,
     atBat: undefined,
     lanes: [[], [], []],
     laneElements: [[], [], []],
@@ -52,84 +60,106 @@ const game = {
     laneElements: [[], [], []],
     totalScore: 0,
   },
-  currentTurn: undefined
+  currentTurn: undefined,
+  gameID: undefined,
+  deals: 0,
+  singlePlayer: false,
 };
 let playerState = {
   userName: undefined,
   visitorID: undefined,
   status: 'lobby',
-  lastMessageSeen: 0
+  lastMessageSeen: 0,
+  initiator: false,
+}
+let queryTimes = {
+  lobbyMessages: Date.now(),
+  users: Date.now(),
+  handshake: Date.now()
 }
 let currentDieID = 0;
 
 function assignHandlers() {
+  // for testing
 
-  // let laneElements = [...document.querySelectorAll('.die-lane')];
-  // for (let lane in laneElements) {
-  //   let element = laneElements[lane];
-  //   if (element.classList.contains('opponent')) {
-  //     element.addEventListener('pointerdown', () => {
-  //       addDieToLane('opponent', game.opponent.atBat, 0);
-  //       document.querySelector(`#player-area .new-die-box`).innerHTML = '';
-  //     });
-  //   }
-  // }
+  // document.querySelector('#player-area .new-die-box').addEventListener('pointerdown', () => {
+  //   if (!game.player.atBat) { dealDie('player', randomInt(1, 6)) };
+  // });
+  // document.querySelector('#opponent-area .new-die-box').addEventListener('pointerdown', () => {
+  //   if (!game.opponent.atBat) { dealDie('opponent', randomInt(1, 6)) }
+  // });
+  // document.querySelector('#opponent-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => {
+  //   addDieToLane('opponent', game.opponent.atBat, 0);
+  // });
+  // document.querySelector('#opponent-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => {
+  //   addDieToLane('opponent', game.opponent.atBat, 1);
+  // });
+  // document.querySelector('#opponent-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => {
+  //   addDieToLane('opponent', game.opponent.atBat, 2);
+  // });
+  // document.querySelector('#footer').addEventListener('pointerdown', resetGame);  
 
-  document.querySelector('#opponent-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => { 
-    addDieToLane('opponent', game.opponent.atBat, 0);
-  });
-  document.querySelector('#opponent-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => { 
-    addDieToLane('opponent', game.opponent.atBat, 1);
-  });
-  document.querySelector('#opponent-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => { 
-    addDieToLane('opponent', game.opponent.atBat, 2);
-  });
-
-  document.querySelector('#player-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => { 
+  document.querySelector('#player-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => {
     addDieToLane('player', game.player.atBat, 0);
   });
-  document.querySelector('#player-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => { 
+  document.querySelector('#player-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => {
     addDieToLane('player', game.player.atBat, 1);
   });
-  document.querySelector('#player-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => { 
+  document.querySelector('#player-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => {
     addDieToLane('player', game.player.atBat, 2);
   });
 
-  // for testing
-  document.querySelector('#player-area .new-die-box').addEventListener('pointerdown', () => { 
-    if (!game.player.atBat) { dealDie('player', randomInt(1, 6)) };
-  });
-  document.querySelector('#opponent-area .new-die-box').addEventListener('pointerdown', () => { 
-    if (!game.opponent.atBat) { dealDie('opponent', randomInt(1, 6)) }
-  });
-
-  // document.querySelector('#header').addEventListener('pointerdown', populateUserList);
-  document.querySelector('#footer').addEventListener('pointerdown', resetGame);
-  document.querySelector('#chat-area').addEventListener('pointerdown', () => getLobbyMessages);
-  // document.querySelector('#lobby-control-panel').addEventListener('pointerdown', (e) => {    
-  //   document.querySelector('#lobby-screen').style.display = 'none';
-  // });
-  
   document.querySelector('#chat-submit-button').addEventListener('click', () => {
-    let message = document.querySelector('#lobby-chat-field').value.trim();
+    let message = convertToPlain(document.querySelector('#lobby-chat-field').value.trim());
     document.querySelector('#lobby-chat-field').value = '';
     if (message) {
-      sendLobbyMessage(message);      
+      sendLobbyMessage(message);
     }
   });
+  document.querySelector('#confirm-game-button').addEventListener('click', async () => {
+    playerState.status = `playing vs. ${game.opponent.userName}`;
+    let updateShake = {
+      status: playerState.status,
+      visitorID: playerState.visitorID,
+    };
+    handshake(updateShake);
+    dismissConfirmModal();
+    document.querySelector('#player-name').textContent = playerState.userName;
+    document.querySelector('#opponent-name').textContent = game.opponent.userName;
+    document.querySelector('#lobby-screen').classList.add('hidden');
+    await pause(userPreferences.animationSpeed);
+    document.querySelector('#lobby-screen').classList.remove('blurred');
+    document.querySelector('#lobby-screen').style.display = 'none';
+    document.querySelector('#clear-cookies-button').style.display = 'none';
+    document.querySelector('#header-message').textContent = `Knucklebones game #${game.gameID}`;     
+    await pause(200);
+    callCoinModal(game.firstPlayer);
+  });
+
   document.querySelector('#toggle-ready-button').addEventListener('click', async (e) => {
     if (playerState.status !== 'ready') {
       playerState.status = 'ready';
-      await handshake({ visitorID: playerState.visitorID, status: playerState.status });
-      await populateUserList();
-      e.target.innerHTML = 'Stop Searching';
+      let readyUserList = await getReadyUsers();
+      if (readyUserList.length) {
+        let newOpponent = readyUserList[0];
+        game.opponent.userName = newOpponent.userName;
+        game.opponent.visitorID = newOpponent.visitorID;
+        console.log('READY USER', newOpponent);
+        await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+        playerState.initiator = true;
+        callConfirmModal(newOpponent);
+      } else {
+        await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+        await populateUserList();
+        e.target.innerHTML = 'Stop Searching';
+      }
     } else {
-      playerState.status = 'lobby'
+      playerState.status = 'lobby';
       await handshake({ visitorID: playerState.visitorID, status: playerState.status });
       await populateUserList();
       e.target.innerHTML = 'Find Game';
     }
-  });  
+  });
   document.querySelector('#clear-cookies-button').addEventListener('click', () => {
     localStorage.clear();
     window.location.reload(true);
@@ -138,22 +168,20 @@ function assignHandlers() {
   addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.keycode === 13) {
       e.preventDefault();
-      console.log(e)
+      console.log(e);
       let lobbyChatField = document.querySelector('#lobby-chat-field');
       if (document.activeElement === lobbyChatField) {
         console.warn('enter pressed!!');
         document.querySelector('#chat-submit-button').click();
-        // let newMessage = lobbyChatField.value.trim();
       }
-    } 
+    }
   });
 }
 
 async function populateUserList() {
-  console.warn('calling populateUserList');
-  let userList = await getUsersFromDatabase();
-  document.querySelector('#user-list').innerHTML = '';
   let nowInSeconds = Math.round(Date.now() / 1000);
+  let userList = await getUsersFromDatabase();  
+  document.querySelector('#user-list').innerHTML = '';
   userList.forEach((user) => {
     let lastSeen = nowInSeconds - parseInt(user.lastPing);
     let lastSeenMessage;
@@ -166,7 +194,7 @@ async function populateUserList() {
       console.log('using decimal', minuteDecimal);
     } else {
       lastSeenMessage = `${lastSeen} seconds ago`;
-      if (lastSeen < 3) {
+      if (lastSeen <= 3) {
         lastSeenMessage = 'now';
       }
     }
@@ -192,15 +220,15 @@ const userPreferences = {
   animationSpeed: 200
 }
 
-const pollInterval = 2000;
+const pollInterval = 1000;
 
-async function performInitialHandshake(enteredName) {
+async function performInitialHandshake(enteredName) {  
   console.warn('---------> INITIAL handshake!');
   const firstShakeData = {
     userName: enteredName,
     status: 'lobby',
   };
-  const visitorID = await handshake(JSON.stringify(firstShakeData));
+  const visitorID = await handshake(firstShakeData);
   document.querySelector('#player-name').innerHTML = enteredName + ' #' + visitorID;
   playerState.visitorID = visitorID;
   playerState.userName = enteredName;
@@ -216,52 +244,270 @@ async function performInitialHandshake(enteredName) {
     // await handshake(JSON.stringify(updateShake));
     // let shakeTime = Date.now() - startedShakeAt;
     // console.warn('took', shakeTime);
-  // }, 1000);
-
-  startPolling();
-  
+  // }, 1000);  
 }
 
+let pollLoop;
+
 function startPolling() {
-  setInterval(() => {
-    populateUserList();
-    printLobbyMessages();
-    let updateShake = {
-      status: playerState.status,
-      visitorID: playerState.visitorID,
-    };
-    handshake(JSON.stringify(updateShake));
+  // let lastPoll = 0;
+  populateUserList(); // so that self is in list sooner
+  pollLoop = setInterval(async () => {
+    if (playerState.status === 'lobby' || playerState.status === 'ready') {
+      let now = Date.now();
+      // console.green(`POLLING LOBBY ${!lastPoll || now - lastPoll}`)
+      // lastPoll = now;
+      let waitingForConfirm = document.querySelector('#confirm-game-modal').classList.contains('showing');
+      if (waitingForConfirm) {
+        // console.green('ALREADY FOUND READY OPPONENT');
+        if (!playerState.initiator) {
+          if (playerState.status !== 'confirming') {
+            console.green('I am RESPONDANT polling findGameWithIDs!');
+            let newGame = await findGameWithIDs([game.opponent.visitorID, playerState.visitorID]);
+            if (newGame) {
+              console.log('RESPONDANT found a game', newGame);
+              console.log('game obj was', game);
+              game.gameID = newGame.gameID;
+              game.player.userName = playerState.userName;
+              game.firstPlayer = newGame.playerTurn;
+              game.atBat = parseInt(newGame.atBat);
+              game.currentTurn = newGame.playerTurn;
+
+              playerState.status = 'confirming';
+              await handshake([playerState.visitorID, playerState.status]);
+              document.querySelector('#opponent-check').classList.add('checked');
+              await pause(500);
+              document.querySelector('#player-check').classList.add('checked');
+              document.querySelector('#confirm-message').textContent = 'CONNECTED!';
+              document.querySelector('#confirm-game-button').disabled = false;
+            } else {
+              console.log('checked but did not find a newly-created game with both players');
+            }
+          } else {
+            console.green('button enabled now.');
+          }
+            
+        } else { // initiator
+          console.log('i am initiator --------->');
+          let opponentStatus = await checkUserStatus(game.opponent.visitorID);
+          if (opponentStatus === 'confirming') {
+            document.querySelector('#opponent-check').classList.add('checked');
+            await pause(500);
+            document.querySelector('#player-check').classList.add('checked');
+            document.querySelector('#confirm-message').textContent = 'CONNECTED!';
+            document.querySelector('#confirm-game-button').disabled = false;
+            playerState.status = 'confirming';
+          } else {
+            console.log('checked, but opponent is still', opponentStatus);
+          }
+
+        }
+      } else { // confirm modal not showing (waiting in lobby)
+        if (now - queryTimes.users >= (pollInterval / 1.5)) {
+          if (playerState.status === 'ready') {
+            let readyUserList = await getReadyUsers(); // check for ready users before updating HTML list            
+            readyUserList = readyUserList.filter((userRow) => {
+              return parseInt(userRow.visitorID) !== playerState.visitorID;
+            });
+            if (readyUserList.length) {
+              let newOpponent = readyUserList[0];
+              game.opponent.userName = newOpponent.userName;
+              game.opponent.visitorID = newOpponent.visitorID;
+              await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+              callConfirmModal(newOpponent);
+            } else {
+              populateUserList(); // only update HTML if ready user not found
+            }
+          } else {
+            populateUserList();
+          }          
+        } else {
+          console.error('throttled populateUserList', (now - queryTimes.users));
+        }        
+        if (now - queryTimes.lobbyMessages >= (pollInterval / 1.5)) {
+          printLobbyMessages();
+        } else {
+          console.error('throttled printLobbyMessages', (now - queryTimes.lobbyMessages));
+        }         
+      }
+      let updateShake = {
+        status: playerState.status,
+        visitorID: playerState.visitorID,
+      };
+      handshake(updateShake);
+    } else if (playerState.status.indexOf('playing' !== -1)) { // player has flipped coin
+      if (!game.started) { // opponent has not yet flipped
+        let opponentStatus = await checkUserStatus(game.opponent.visitorID);
+        if (opponentStatus.indexOf('playing') !== -1) { // opponent has flipped
+          game.started = true;
+          document.querySelector('#opponent-area').classList.remove('dim');
+          console.green('--------- GAME START! ---------------------------')
+        }
+      } else { // both have flipped and the game has started
+        let currentGameData = await getGameData(game.gameID);
+        if (!game.deals) { // first turn
+          if (!game.player.atBat && playerState.visitorID == game.firstPlayer) {            
+            dealDie('player', game.atBat);
+          } else if (!game.opponent.atBat) {
+            dealDie('opponent', game.atBat);
+          }          
+        } else {
+          // 2nd turn onward
+          console.log('2ND TURN PLUS POLLING ------------------------------>');
+          console.log('new data', currentGameData)
+          console.log('game.player.atBat', game.player.atBat);
+          console.log('currentGameData.currentTurn', currentGameData.playerTurn);
+          console.log('vis id', playerState.visitorID);
+          let convertedLane = parseInt(currentGameData.lastMove);
+          console.log('orig lane', convertedLane);
+          if (convertedLane == 0) {
+            convertedLane = 2;
+          } else if (convertedLane == 2) {
+            convertedLane = 0;
+          }
+          console.log('conv lane', convertedLane);
+          if (game.opponent.atBat && !game.player.atBat && currentGameData.playerTurn == playerState.visitorID) {
+            await addDieToLane('opponent', game.opponent.atBat, convertedLane);
+            // sendMove()
+            dealDie('player', parseInt(currentGameData.atBat));
+          }
+        }
+      }
+      let updateShake = {
+        status: playerState.status,
+        visitorID: playerState.visitorID,
+      };
+      handshake(updateShake);
+    }
   }, pollInterval);
 }
 
 document.documentElement.style.setProperty('--die-animation-speed', userPreferences.animationSpeed + 'ms');
 
-export async function init() {
-  detectScreen();
-  assignHandlers();
-  // let enteredName = 'User';
-  // let knownUser = localStorage.getItem('kbones-prefs');
-  // if (knownUser) {
-  //   console.error('KNOWN USER');
-  //   loadUserState(knownUser);
-  //   enteredName = playerState.userName;
-  // } else {
-  //   console.error('UNKNOWN USER');
+function contestantWithID(visitorID) {
+  let contestant;
+  console.green('checking id to find name', visitorID);
+  if (playerState.visitorID == visitorID) {
+    contestant = playerState;
+  } else if (game.opponent.visitorID == visitorID) {
+    contestant = game.opponent;
+  }
+  if (!contestant) {
+    console.log('-------------------------------')
+    console.log('contestantWithID failed with playerState', playerState)
+    console.log('contestantWithID failed with game obj', game)
+    console.log('-------------------------------')
+  }
+  return contestant;
+}
+
+async function callCoinModal(firstTurnID) { // called once at the beginning of each game
+  let modal = document.querySelector('#coin-flip-modal');
+  if (modal.classList.contains('showing')) {
+    return;
+  }
+  console.log('game obj is', game)
+  console.warn('CALLING COIN MODAL', firstTurnID);
+  modal.style.display = 'flex';
+  document.querySelector('#coin-name').textContent = playerState.userName;
+  await pause(100);
+  modal.classList.add('showing');
+  await pause(userPreferences.animationSpeed);
+  let coin = document.querySelector('#coin');
+  let flipCount = randomInt(8,12);
+  while (flipCount) {
+    coin.classList.add('turned');
+    await pause(100);
+    if (flipCount % 2 === 0) {
+      document.querySelector('#coin-name').textContent = playerState.userName;
+    } else {
+      document.querySelector('#coin-name').textContent = game.opponent.userName;
+    }
+    coin.classList.remove('turned');
+    await pause(100);
+    if (flipCount <= 4 && document.querySelector('#coin-name').textContent === contestantWithID(firstTurnID).userName) {
+      flipCount = 0;
+    } else {
+      flipCount--
+    }
+  }
+  await pause(200);
+  coin.classList.add('landed');
+  await pause(1000);
+  modal.classList.remove('showing');
+  await pause(userPreferences.animationSpeed);
+  modal.style.display = 'none';
+  coin.classList.remove('landed');
+
+  // let opponentStatus = await checkUserStatus(game.opponent.visitorID);
+  // let opponentFlipped = opponentStatus.indexOf('playing') !== -1;
+  // console.log('------- OPP FLIPPED?', opponentFlipped);
+  // if (opponentFlipped) {
+  //   if (!game.opponent.atBat && !game.player.atBat) {
+  //     // dealDie(game.firstPlayer == playerState.visitorID ? 'player' : 'opponent');
+  //     if (game.firstPlayer == playerState.visitorID) {
+  //       let firstDie = await getInitialGameDie();
+  //       console.error('flipped a', firstDie);
+  //     }
+  //   }
   // }
-  // document.querySelector('#player-name').innerHTML = enteredName;
-  // game.player.userName = enteredName;
-  // document.querySelector('#player-name').innerHTML = playerState.userName;
+}
+async function callConfirmModal(opponent) {
+  let modal = document.querySelector('#confirm-game-modal');
+  if (modal.classList.contains('showing')) {
+    return;
+  }
+  console.error('CALLING CONFIRM MODAL')
+  document.querySelector('#lobby-screen').classList.add('blurred');
+  modal.style.display = 'flex';
+  document.querySelector('#player-confirm-name').textContent = playerState.userName;
+  document.querySelector('#opponent-confirm-name').textContent = opponent.userName;
+  // document.querySelector('#confirm-message').textContent = opponent.userName;
+  await pause(50);
+  modal.classList.add('showing');
+  if (playerState.initiator) {
+    console.green('CREATING GAME');
+    let newGame = await createGame([playerState.visitorID, opponent.visitorID]);
+    console.log('game?', newGame);
+    let firstTurnID = parseInt(newGame[1]);
+    game.gameID = newGame[0];
+    if (playerState.visitorID === firstTurnID) {
+      game.firstPlayer = firstTurnID;
+      game.secondPlayer = opponent.visitorID;
+    } else {
+      game.firstPlayer = opponent.visitorID;
+      game.secondPlayer = firstTurnID;
+    }
+    game.currentTurn = game.firstPlayer;
+    game.atBat = parseInt(newGame[2]);
+
+    console.log('now local game obj is', game);
+    document.querySelector('#player-check').classList.add('checked');
+  } else {
+    console.log('not the initiator');
+  }
+}
+async function dismissConfirmModal() {
+  let modal = document.querySelector('#confirm-game-modal');
+  modal.classList.remove('showing');
+  document.querySelector('#lobby-screen').classList.remove('blurred');
+  await pause(userPreferences.animationSpeed);
+  modal.style.display = 'none';
+  document.querySelector('#confirm-message').textContent = 'Connecting players...';
+  document.querySelector('#opponent-check').classList.remove('checked');
+  document.querySelector('#player-check').classList.remove('checked');
+}
+  
+
+export async function init() {
+  assignHandlers();
   game.player.userName = playerState.userName;
   if (knownUser) {
     await handshake({ visitorID: playerState.visitorID, status: playerState.status });
-    startPolling();
   } else {
     await performInitialHandshake(playerState.userName);
-    populateUserList();
   }
-  window.onresize = function () {    
-    detectScreen();
-  };
+  startPolling();
 }
 
 function validateName(e) {
@@ -377,9 +623,9 @@ class Die {
     `;
     document.querySelector(targetDivQuery).innerHTML += newDieHTML;
     const dieElement = document.querySelector(`#${this.elementID}`)
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       dieElement.classList.add('showing');
-    });
+    }, 50);
     currentDieID++;
   }
 }
@@ -390,6 +636,17 @@ function pause(duration) {
       resolve();
     }, duration);
   });
+}
+
+async function sendMove(lane) {
+  let moveData = {
+    gameID: game.gameID,
+    visitorID: playerState.visitorID,
+    opponentID: game.opponent.visitorID,
+    chosenLane: lane,
+  }
+  let nextDie = await postNewMove(moveData);
+  dealDie('opponent', parseInt(nextDie));
 }
 
 async function destroyDie(query) {
@@ -411,13 +668,13 @@ async function dealDie(contestant, denomination) {
       availableLanes[i].classList.add('available');
       await pause(150);
   }
+  game.deals++;
 }
 
 const totalDiceInPlay = (contestant) =>
   [...game[contestant].laneElements[0], ...game[contestant].laneElements[1], ...game[contestant].laneElements[2]].length;
 
 async function addDieToLane(contestant, denomination, lane) {
-
   game[contestant].lanes[lane].push(denomination); // get rid of game[contestant].lanes
 
   const newDie = new Die(denomination, `#${contestant}-area .die-lane:nth-child(${lane + 1})`, lane);
@@ -442,9 +699,17 @@ async function addDieToLane(contestant, denomination, lane) {
       winner = 'opponent';
       loser = 'player';
     }
-    await pause(60);
+    await pause(100);
     document.querySelector(`#${winner}-area.turn-area`).classList.add('won');
     document.querySelector(`#${loser}-area.turn-area`).classList.add('lost');
+  } else {
+    if (contestant === 'player') {
+      if (!game.singlePlayer) {
+        sendMove(lane)
+      } else {
+        dealToCPU();
+      }
+    }
   }
 }
 
@@ -611,6 +876,7 @@ function storeUserState() {
 function loadUserState(rawData) {
   let newState = JSON.parse(rawData);
   playerState = { ...newState };
+  playerState.status = 'lobby';
   console.warn('loaded user', playerState);
 }
 
@@ -626,33 +892,36 @@ function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
+function convertToPlain(html) {
+  var tempDivElement = document.createElement('div');
+  tempDivElement.innerHTML = html;
+  return tempDivElement.textContent || tempDivElement.innerText || '';
+}
+
 async function printLobbyMessages(forceHistory) {
-  let calledAt = Date.now();
   let messagesArray = await getLobbyMessages(forceHistory);
-  console.log('got', messagesArray);
-  console.log('took', Date.now() - calledAt);
   if (messagesArray.length === 0) {
     return;
   }
   let highestMessageID = messagesArray[messagesArray.length-1].messageID;
   playerState.lastMessageSeen = highestMessageID;
   let chatWindow = document.querySelector('#lobby-chat-window');
-  // chatWindow.innerHTML = '';
   messagesArray.forEach((messageRow) => {
     let rawDate = new Date(messageRow.timePosted);
     let convertedTime = rawDate.toLocaleString([], { hour: 'numeric', minute: 'numeric', hour12: true });
     let timeOfDay = `${convertedTime.slice(0, -3)} ${convertedTime.slice(-2).toLowerCase()}`;
     let messageClass = parseInt(messageRow.visitorID) === playerState.visitorID ? 'chat-message self' : 'chat-message';
     let rowHTML = `
-      <div class="${messageClass}">
+      <div id="${messageRow.messageID}" class="${messageClass}">
         <div>${messageRow.userName} (#${messageRow.visitorID})</div>
         <div>message #${messageRow.messageID}</div>
-        <div>${messageRow.message}</div>
+        <div>${convertToPlain(messageRow.message)}</div>
         <div>${timeOfDay}</div>
       </div>
     `;
     chatWindow.innerHTML += rowHTML;
   });
+
   chatWindow.scrollTop = chatWindow.scrollHeight;
   if (!forceHistory) {
     storeUserState();
@@ -701,9 +970,98 @@ async function printLobbyMessages(forceHistory) {
 //   highScores = [...scoreArray];
 //   return scoreArray;
 // }
+async function postNewMove(moveData) {
+  const response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/sendmove.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: JSON.stringify(moveData),
+  });
+  return response.data;
+}
+async function getGameData(gameID) {
+  let response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/getgamebyid.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: gameID,
+  });
+  return response.data;
+}
+async function checkUserStatus(visitorID) {
+  const response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/checkuserstatus.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: visitorID,
+  });
+  let userStatus = response.data;
+  return userStatus;
+}
+async function findGameWithIDs(visitorIDs) {
+  const response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/findassociatedgame.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: JSON.stringify(visitorIDs),
+  });
+  let gamesArray = response.data;
+  console.log('raw', gamesArray)
+  gamesArray.forEach((gameRow, g) => {
+    gamesArray[g] = JSON.parse(gameRow);
+  })
+  console.log('parsed', gamesArray)
+  return gamesArray[0];
+}
+async function createGame(visitorIDs) {
+  const response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/creategame.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: visitorIDs,
+  });
+  return response.data;
+}
+async function getInitialGameDie() {
+  console.warn('CALLING getInitialGameDie');
+  let calledAt = Date.now();
+  queryTimes.users = calledAt;
+  let response = await axios({
+    method: 'get',
+    url: 'https://mikedonovan.dev/kbones/php/getinitialdie.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+  });
+  return response.data
+}
+async function getRandomFlipFromDatabase() {
+  console.warn('CALLING getRandomFlipFromDatabase');
+  let calledAt = Date.now();
+  queryTimes.users = calledAt;
+  let response = await axios({
+    method: 'get',
+    url: 'https://mikedonovan.dev/kbones/php/getrandomflip.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+  });
+  console.log('GOT RAND', response.data)
+}
 async function getUsersFromDatabase() {
   // console.warn('CALLING getUsersFromDatabase');
   let calledAt = Date.now();
+  queryTimes.users = calledAt;
   let response = await axios({
     method: 'get',
     url: 'https://mikedonovan.dev/kbones/php/getusers.php',
@@ -715,12 +1073,30 @@ async function getUsersFromDatabase() {
   usersArray.forEach((row, i, self) => {
     self[i] = JSON.parse(row)
   });
-  // console.warn('got', usersArray.length, 'users in', Date.now() - calledAt);
+  console.warn('got', usersArray.length, 'users in', Date.now() - calledAt);
+  return usersArray;
+}
+async function getReadyUsers() {
+  // console.warn('CALLING getUsersFromDatabase');
+  let calledAt = Date.now();
+  queryTimes.users = calledAt;
+  let response = await axios({
+    method: 'get',
+    url: 'https://mikedonovan.dev/kbones/php/getreadyusers.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    }
+  });
+  const usersArray = [...response.data];
+  usersArray.forEach((row, i, self) => {
+    self[i] = JSON.parse(row)
+  });
+  console.warn('got', usersArray.length, 'READY users in', Date.now() - calledAt);
   return usersArray;
 }
 async function getLobbyMessages(forceHistory=0) {
-  // console.warn('CALLING getLobbyMessages');
-  let calledAt = Date.now();
+  let calledAt = Date.now(); 
+  queryTimes.lobbyMessages = Date.now();
   let response = await axios({
     method: 'post',
     url: 'https://mikedonovan.dev/kbones/php/getlobbymessages.php',
@@ -735,7 +1111,7 @@ async function getLobbyMessages(forceHistory=0) {
   messagesArray.forEach((row, i, self) => {
     self[i] = JSON.parse(row);
   });
-  // console.warn('got', messagesArray.length, 'messasges in', Date.now() - calledAt);
+  console.warn('got', messagesArray.length, 'messasges in', Date.now() - calledAt);
   return messagesArray.reverse();
 }
 async function sendLobbyMessage(message) {
@@ -744,9 +1120,7 @@ async function sendLobbyMessage(message) {
     visitorID: playerState.visitorID,
     message: message
   }
-  // console.warn('CALLING sendLobbyMessage with', messageData);
   messageData = JSON.stringify(messageData);
-  let calledAt = Date.now();
   let response = await axios({
      method: 'post',
     url: 'https://mikedonovan.dev/kbones/php/sendlobbymessage.php',
@@ -755,7 +1129,6 @@ async function sendLobbyMessage(message) {
     },
     data: messageData
   });
-  // console.warn('sent message? in', Date.now() - calledAt);
   printLobbyMessages();
   console.log(response);
   return response;
@@ -763,6 +1136,8 @@ async function sendLobbyMessage(message) {
 
 async function handshake(shakeData) {
   let startedShake = Date.now();
+  queryTimes.handshake = Date.now();
+  
   const shakeResult = await axios({
     method: 'post',
     url: 'https://mikedonovan.dev/kbones/php/handshake.php',
@@ -778,7 +1153,7 @@ async function handshake(shakeData) {
 }
 
 document.querySelector('#enter-lobby-button').addEventListener('click', () => {
-  playerState.userName = document.querySelector('#name-entry-field').value;
+  playerState.userName = convertToPlain(document.querySelector('#name-entry-field').value);
   init();
   document.querySelector('#name-entry-screen').style.display = 'none';
 });
@@ -793,14 +1168,56 @@ document.querySelector('#name-entry-field').addEventListener('input', (e) => {
 
 let knownUser = localStorage.getItem('kbones-prefs');
 if (knownUser) {
-  console.error('KNOWN USER');
+  console.green('KNOWN USER');
   loadUserState(knownUser);
   document.querySelector('#name-entry-field').value = playerState.userName;
+  document.querySelector('#name-entry-field').disabled = true;
   document.querySelector('#enter-lobby-button').disabled = false;
   document.querySelector('#known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
 } else {
-  console.error('UNKNOWN USER');
+  console.green('UNKNOWN USER');
 }
 
+function createTitleDie() {
+  let titleDie = new Die(5, '#title-die-area', 0);
+}
+
+async function makeCPUMove() {
+  console.log('game when move', game);
+  console.log('game.opponent.laneElements', game.opponent.laneElements);
+  let availableLanes = [];
+  game.opponent.laneElements.forEach((arr, i) => {
+    if (arr.length < 3) availableLanes.push(i);
+  });
+  console.log('avail lanes', availableLanes);
+  let chosenLane = availableLanes[randomInt(0, availableLanes.length - 1)];
+  await addDieToLane('opponent', game.opponent.atBat, chosenLane);
+  await pause(500);
+  dealDie('player', randomInt(1, 6));
+}
+async function dealToCPU() {
+  dealDie('opponent', randomInt(1, 6));
+  await pause(randomInt(1000, 1000));
+  makeCPUMove();
+}
+
+document.querySelector('#vs-cpu-button').addEventListener('pointerdown', async () => {
+  document.querySelector('#name-entry-screen').classList.add('hidden');
+  document.querySelector('#lobby-screen').style.display = 'none';
+  document.querySelector('#opponent-area').classList.remove('dim');
+  document.querySelector('#player-name').textContent = playerState.userName;
+  document.querySelector('#opponent-name').textContent = game.opponent.userName;
+  await pause(200);
+  console.log('display none?')
+  document.querySelector('#name-entry-screen').style.display = 'none';
+  game.singlePlayer = true;
+  game.opponent.userName = 'CPU';
+  assignHandlers();
+  dealToCPU();
+});
+
+// document.querySelector('#name-entry-screen').addEventListener('pointerdown', async () => {
+//   console.green('clicked');
+// });
 
 // init();
