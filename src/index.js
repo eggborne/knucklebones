@@ -22,16 +22,27 @@ if (process.env.NODE_ENV === 'development') {
 
 window.onload = async () => {
   detectScreen();
-  document.body.style.opacity = 1;
+  document.body.style.opacity = '1';  
   populateUserList();
   await printLobbyMessages(10);
   document.querySelector('#lobby-chat-window').style.setProperty('scroll-behavior', 'smooth');
   await pause(50);
-  document.querySelector('#title-legend').classList.add('showing');
+  // document.querySelector('#title-legend').classList.add('showing');
+  animateTitle();
+  pause(200);
+  assignHandlers();
+  startPolling();
+};
+
+async function animateTitle() {
+  let letterElementArray = [...document.querySelector('#title-legend').children];
+  for (let i = 1; i < letterElementArray.length; i++) {
+    letterElementArray[i].classList.add('revealed');
+    await pause(50);
+  }
   await pause(600);
   document.querySelector('#title-legend').classList.add('animating');
-
-};
+}
 
 // don't show full screen button if user can't or already is from PWA
 if (!fscreen.fullscreenEnabled || fscreen.fullscreenElement !== null) {
@@ -68,7 +79,7 @@ const game = {
 let playerState = {
   userName: undefined,
   visitorID: undefined,
-  status: 'lobby',
+  status: 'title',
   lastMessageSeen: 0,
   initiator: false,
 }
@@ -82,14 +93,16 @@ let currentDieID = 0;
 function assignHandlers() {
   // for testing
 
-  // document.querySelector('#player-area .new-die-box').addEventListener('pointerdown', () => {
-  //   if (!game.player.atBat) { dealDie('player', randomInt(1, 6)) };
-  // });
+  document.querySelector('#player-area .new-die-box').addEventListener('pointerdown', () => {
+    // if (!game.player.atBat) { dealDie('player', randomInt(1, 6)) };
+    document.querySelector('#opponent-area .die-lane:nth-child(3)').classList.add('highlighted');
+    document.querySelector('#player-area .die-lane:nth-child(3)').classList.add('highlighted');
+  });
   // document.querySelector('#opponent-area .new-die-box').addEventListener('pointerdown', () => {
   //   if (!game.opponent.atBat) { dealDie('opponent', randomInt(1, 6)) }
   // });
   // document.querySelector('#opponent-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => {
-  //   addDieToLane('opponent', game.opponent.atBat, 0);
+    // addDieToLane('opponent', game.opponent.atBat, 0);    
   // });
   // document.querySelector('#opponent-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => {
   //   addDieToLane('opponent', game.opponent.atBat, 1);
@@ -97,7 +110,6 @@ function assignHandlers() {
   // document.querySelector('#opponent-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => {
   //   addDieToLane('opponent', game.opponent.atBat, 2);
   // });
-  // document.querySelector('#footer').addEventListener('pointerdown', resetGame);  
 
   document.querySelector('#player-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => {
     addDieToLane('player', game.player.atBat, 0);
@@ -137,10 +149,11 @@ function assignHandlers() {
   });
 
   document.querySelector('#toggle-ready-button').addEventListener('click', async (e) => {
+    let lobbyPanel = document.querySelector('#lobby-control-panel');
     if (playerState.status !== 'ready') {
       playerState.status = 'ready';
       let readyUserList = await getReadyUsers();
-      if (readyUserList.length) {
+      if (readyUserList.length) {        
         let newOpponent = readyUserList[0];
         game.opponent.userName = newOpponent.userName;
         game.opponent.visitorID = newOpponent.visitorID;
@@ -149,11 +162,13 @@ function assignHandlers() {
         playerState.initiator = true;
         callConfirmModal(newOpponent);
       } else {
+        lobbyPanel.classList.add('searching');
         await handshake({ visitorID: playerState.visitorID, status: playerState.status });
         await populateUserList();
         e.target.innerHTML = 'Stop Searching';
       }
     } else {
+      lobbyPanel.classList.remove('searching');
       playerState.status = 'lobby';
       await handshake({ visitorID: playerState.visitorID, status: playerState.status });
       await populateUserList();
@@ -174,6 +189,11 @@ function assignHandlers() {
         console.warn('enter pressed!!');
         document.querySelector('#chat-submit-button').click();
       }
+      let nameEntryField = document.querySelector('#name-entry-field');
+      if (document.activeElement === nameEntryField) {
+        console.warn('enter pressed!!');
+        document.querySelector('#enter-lobby-button').click();
+      }
     }
   });
 }
@@ -186,12 +206,12 @@ async function populateUserList() {
     let lastSeen = nowInSeconds - parseInt(user.lastPing);
     let lastSeenMessage;
     if (lastSeen > 59) {
-      let minutes = secondsToMinutes(lastSeen);
-      let minuteCount = minutes.minutes;
-      let minuteDecimal = (minutes.seconds / 60).toFixed(1).toString().slice(2);
-      lastSeenMessage = `${minuteCount}.${minuteDecimal} minutes ago`;
-      console.log('using minutes', minutes);
-      console.log('using decimal', minuteDecimal);
+      // let minutes = secondsToMinutes(lastSeen);
+      // let minuteCount = minutes.minutes;
+      // let minuteDecimal = (minutes.seconds / 60).toFixed(1).toString().slice(2);
+      // lastSeenMessage = `${minuteCount}.${minuteDecimal} minutes ago`;
+      // console.log('using minutes', minutes);
+      // console.log('using decimal', minuteDecimal);
     } else {
       lastSeenMessage = `${lastSeen} seconds ago`;
       if (lastSeen <= 3) {
@@ -250,9 +270,17 @@ async function performInitialHandshake(enteredName) {
 let pollLoop;
 
 function startPolling() {
-  // let lastPoll = 0;
-  populateUserList(); // so that self is in list sooner
+  // let lastPoll = 0;  
   pollLoop = setInterval(async () => {
+    if (playerState.status === 'title') {
+      // console.log('only handshaking due to title screen');
+      // let updateShake = {
+      //   visitorID: playerState.visitorID,
+      //   status: playerState.status,
+      // };
+      // handshake(updateShake);
+      return
+    }
     if (playerState.status === 'lobby' || playerState.status === 'ready') {
       let now = Date.now();
       // console.green(`POLLING LOBBY ${!lastPoll || now - lastPoll}`)
@@ -500,14 +528,13 @@ async function dismissConfirmModal() {
   
 
 export async function init() {
-  assignHandlers();
   game.player.userName = playerState.userName;
   if (knownUser) {
     await handshake({ visitorID: playerState.visitorID, status: playerState.status });
   } else {
     await performInitialHandshake(playerState.userName);
   }
-  startPolling();
+   // so that self is in list sooner
 }
 
 function validateName(e) {
@@ -520,7 +547,10 @@ function validateName(e) {
 }
 
 class Die {
-  constructor(denomination, targetDivQuery, lane) {
+  constructor(denomination, targetDivQuery, lane, demo) {
+    if (demo && !document.querySelector('#tutorial-screen').classList.contains('showing')) {
+      console.green('cancelled die creation because no tutorial');
+    }
     this.denomination = denomination;
     this.lane = lane;
     this.elementID = 'die-' + currentDieID;
@@ -674,7 +704,11 @@ async function dealDie(contestant, denomination) {
 const totalDiceInPlay = (contestant) =>
   [...game[contestant].laneElements[0], ...game[contestant].laneElements[1], ...game[contestant].laneElements[2]].length;
 
-async function addDieToLane(contestant, denomination, lane) {
+async function addDieToLane(contestant, denomination, lane, demo) {
+  if (demo && !document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('cancelled addDieToLane due to tutorial closed');
+    return;
+  }
   game[contestant].lanes[lane].push(denomination); // get rid of game[contestant].lanes
 
   const newDie = new Die(denomination, `#${contestant}-area .die-lane:nth-child(${lane + 1})`, lane);
@@ -687,29 +721,33 @@ async function addDieToLane(contestant, denomination, lane) {
   await destroyDie(`#${contestant}-area .new-die-box .die`);
   game[contestant].atBat = undefined;
   updateContestantScore(contestant);
-  await checkForCrossMatches(contestant, newDie);
-  colorMatchingDice(contestant);
-  await pause(userPreferences.animationSpeed);
-  if (totalDiceInPlay(contestant) === 9) {
-    let winner, loser;
-    if (game.player.totalScore > game.opponent.totalScore) {
-      winner = 'player';
-      loser = 'opponent';
-    } else {
-      winner = 'opponent';
-      loser = 'player';
-    }
-    await pause(100);
-    document.querySelector(`#${winner}-area.turn-area`).classList.add('won');
-    document.querySelector(`#${loser}-area.turn-area`).classList.add('lost');
-  } else {
-    if (contestant === 'player') {
-      if (!game.singlePlayer) {
-        sendMove(lane)
+  if (!demo) {
+    await checkForCrossMatches(contestant, newDie);
+    colorMatchingDice(contestant);
+    await pause(userPreferences.animationSpeed);
+    if (totalDiceInPlay(contestant) === 9) {
+      let winner, loser;
+      if (game.player.totalScore > game.opponent.totalScore) {
+        winner = 'player';
+        loser = 'opponent';
       } else {
-        dealToCPU();
+        winner = 'opponent';
+        loser = 'player';
+      }
+      await pause(100);
+      document.querySelector(`#${winner}-area.turn-area`).classList.add('won');
+      document.querySelector(`#${loser}-area.turn-area`).classList.add('lost');
+    } else {
+      if (contestant === 'player') {
+        if (!game.singlePlayer) {
+          sendMove(lane)
+        } else {
+          dealToCPU();
+        }
       }
     }
+  } else {
+    return newDie;
   }
 }
 
@@ -718,7 +756,6 @@ function printLaneTotal(contestant, lane) {
   [...game[contestant].laneElements[lane]].forEach((element) => {
     laneArray.push(element.denomination);
   });
-  console.log('laneArray', laneArray)
   let totalElement = document.querySelector(`#${contestant}-area .die-lane-total:nth-child(${lane + 1})`);
   if (!laneArray.length) {
     totalElement.innerHTML = 0;
@@ -812,7 +849,7 @@ async function checkForCrossMatches(aggressor, attackingDie) {
   if (doomedDice.length) {
     updateContestantScore(nemesis);
   }
-  document.querySelector('#debug').innerHTML = `o - ${totalDiceInPlay('opponent')} <br /> p - ${totalDiceInPlay('player')}`;
+  // document.querySelector('#debug').innerHTML = `o - ${totalDiceInPlay('opponent')} <br /> p - ${totalDiceInPlay('player')}`;
 }
 
 function colorMatchingDice(contestant) {
@@ -831,8 +868,12 @@ function colorMatchingDice(contestant) {
       }
       organizedDice[die.lane].push(die.denomination);
       allActiveDice.filter((e) => e.lane === die.lane && e.denomination === die.denomination).forEach((match) => {
-        console.warn('COLORING', contestant, match)
-        document.querySelector(`#${match.elementID}`).classList.add(specialClass);
+        const matchEl = document.querySelector(`#${match.elementID}`);
+        if (!matchEl.classList.contains(specialClass)) {
+          matchEl.classList.add(specialClass);
+        } else {
+          console.warn('SKIPPING already colored', contestant, match)
+        }
       });
     }
   });
@@ -848,10 +889,15 @@ function resetGame() {
     area.classList = 'turn-area';
   });
   [...document.querySelectorAll(`.die-lane`)].forEach((lane) => {
-    lane.classList.remove('available');
+    lane.classList.remove('available');    
   });
+  document.querySelector(`#player-area .new-die-box`).innerHTML = '';
+  document.querySelector(`#opponent-area .new-die-box`).innerHTML = '';
   updateContestantScore('player');
   updateContestantScore('opponent');
+  console.warn('after reset, .die arr is', [...document.querySelectorAll(`.die`)]);
+  console.warn('after reset, game is', game);
+  console.log(playerState)
 }
 
 async function toggleFullScreen() {
@@ -876,7 +922,7 @@ function storeUserState() {
 function loadUserState(rawData) {
   let newState = JSON.parse(rawData);
   playerState = { ...newState };
-  playerState.status = 'lobby';
+  playerState.status = 'title';
   console.warn('loaded user', playerState);
 }
 
@@ -1152,10 +1198,15 @@ async function handshake(shakeData) {
   return shakeResult.data
 }
 
-document.querySelector('#enter-lobby-button').addEventListener('click', () => {
+document.querySelector('#enter-lobby-button').addEventListener('click', async () => {
   playerState.userName = convertToPlain(document.querySelector('#name-entry-field').value);
+  playerState.status = 'lobby';
   init();
-  document.querySelector('#name-entry-screen').style.display = 'none';
+  document.querySelector('#lobby-screen').classList.remove('hidden');
+  await pause(100);
+  document.querySelector('#title-screen').classList.add('hidden');
+  await pause(100);
+  document.querySelector('#title-screen').style.display = 'none';
 });
 document.querySelector('#name-entry-field').addEventListener('input', (e) => {
   if (e.target.value.trim().length > 2) {
@@ -1167,32 +1218,67 @@ document.querySelector('#name-entry-field').addEventListener('input', (e) => {
 });
 
 let knownUser = localStorage.getItem('kbones-prefs');
-if (knownUser) {
-  console.green('KNOWN USER');
-  loadUserState(knownUser);
-  document.querySelector('#name-entry-field').value = playerState.userName;
-  document.querySelector('#name-entry-field').disabled = true;
-  document.querySelector('#enter-lobby-button').disabled = false;
-  document.querySelector('#known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
-} else {
-  console.green('UNKNOWN USER');
+assimilateKnownUser();
+
+async function assimilateKnownUser() {
+  if (knownUser) {
+    console.green('KNOWN USER');
+    await handshake({ visitorID: playerState.visitorID, status: 'title' });
+    populateUserList();
+    loadUserState(knownUser);
+    document.querySelector('#name-entry-field').value = playerState.userName;
+    document.querySelector('#name-entry-field').disabled = true;
+    document.querySelector('#enter-lobby-button').disabled = false;
+    document.querySelector('#known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
+  } else {
+    console.green('UNKNOWN USER');
+  }
 }
 
 function createTitleDie() {
-  let titleDie = new Die(5, '#title-die-area', 0);
+  let titleDie = new Die(5, '#main', 0);
+  return titleDie;
+}
+
+async function typeSentence(destinationQuery, containerClass, stringObjArr, typeSpeed) {
+  let sentenceDiv = document.createElement('div');
+  document.querySelector(destinationQuery).appendChild(sentenceDiv);
+  sentenceDiv.classList.add('typed-sentence');
+  sentenceDiv.classList.add(containerClass);
+  stringObjArr.forEach((stringObj) => {
+    let wordArray = stringObj.string.split(' ');
+    wordArray.forEach(wordString => {
+      let wordDiv = document.createElement('div');
+      wordDiv.classList.add('typed-word');
+      if (stringObj.sectionClass) {
+        wordDiv.classList.add(stringObj.sectionClass);
+      }
+      [...wordString].forEach((char, i, arr) => {
+        wordDiv.innerHTML += `
+          <p class="typed-character">${char}</p>
+        `;
+      });
+      sentenceDiv.appendChild(wordDiv);
+      sentenceDiv.innerHTML += '&nbsp';
+    });
+  });
+  for (const word of [...sentenceDiv.children]) {
+    for (const letter of [...word.children]) {
+      letter.style.setProperty('transition-duration', typeSpeed + 'ms');
+      letter.classList.add('revealed');
+      await pause(typeSpeed);
+    }
+  }
 }
 
 async function makeCPUMove() {
-  console.log('game when move', game);
-  console.log('game.opponent.laneElements', game.opponent.laneElements);
   let availableLanes = [];
   game.opponent.laneElements.forEach((arr, i) => {
     if (arr.length < 3) availableLanes.push(i);
   });
-  console.log('avail lanes', availableLanes);
   let chosenLane = availableLanes[randomInt(0, availableLanes.length - 1)];
   await addDieToLane('opponent', game.opponent.atBat, chosenLane);
-  await pause(500);
+  await pause(200);
   dealDie('player', randomInt(1, 6));
 }
 async function dealToCPU() {
@@ -1201,23 +1287,417 @@ async function dealToCPU() {
   makeCPUMove();
 }
 
-document.querySelector('#vs-cpu-button').addEventListener('pointerdown', async () => {
-  document.querySelector('#name-entry-screen').classList.add('hidden');
+let tutorialTypeSpeed = 40;
+
+async function playTutorial() {
+  await typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'On your turn you receive a',
+      },
+      {
+        string: 'random die',
+        sectionClass: 'bold',
+      },
+      {
+        string: 'and place it in one of three',
+      },
+      {
+        string: 'lanes.',
+        sectionClass: 'bold'
+      },
+    ],
+    tutorialTypeSpeed
+  );
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(500);
+
+  new Die(5, `#player-area .new-die-box`);
+  document.querySelector(`#player-area .new-die-box`).classList.add('highlighted');
+  await pause(500);
+
+  let playerLanes = [...document.querySelectorAll(`#player-area .die-lane`)];
+
+  for (const lane in playerLanes) {
+    playerLanes[lane].classList.add('available');
+    await pause(150);
+  }
+
+  await pause(500);
+
+  document.querySelector(`#player-area .new-die-box`).classList.remove('highlighted');
+  await addDieToLane('player', 5, 1, true);
+  for (const lane in playerLanes) {
+    playerLanes[lane].classList.remove('available');
+  }
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(500);
+
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'Your score is the combined value of',
+      },
+      {
+        string: 'all dice in your lanes.',
+        sectionClass: 'bold',
+      },
+    ],
+    tutorialTypeSpeed
+  );
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(1000);
+  let doomedDie = await playDemoTurn('opponent', 3, 2);
+  await pause(200);
+  let firstFour = await playDemoTurn('player', 4, 0);
+  await pause(200);
+  await playDemoTurn('opponent', 6, 0);
+  await pause(200);
+  await playDemoTurn('player', 1, 1);
+  await pause(200);
+  await playDemoTurn('opponent', 4, 2);
+  await pause(200);
+  new Die(4, `#player-area .new-die-box`);
+  document.querySelector(`#player-area .new-die-box`).classList.add('highlighted');
+  
+  await pause(500);
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  await typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'If you place two dice of the same value',
+      },
+      {
+        string: 'in the same lane...',
+        sectionClass: 'bold',
+      },
+    ],
+    tutorialTypeSpeed
+  );
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(500);
+
+  let secondFour = await addDieToLane('player', 4, 0, true);
+
+  await pause(500);
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  await typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'The value of both dice',
+      },
+      {
+        string: 'is doubled.',
+        sectionClass: 'double-color',
+      },
+    ],
+    tutorialTypeSpeed
+  );
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(500);
+
+  document.querySelector('#' + firstFour.elementID).classList.add('doubled');
+  document.getElementById(secondFour.elementID).classList.add('doubled');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector('#' + firstFour.elementID).classList.remove('doubled');
+  document.getElementById(secondFour.elementID).classList.remove('doubled');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector('#' + firstFour.elementID).classList.add('doubled');
+  document.getElementById(secondFour.elementID).classList.add('doubled');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector('#' + firstFour.elementID).classList.remove('doubled');
+  document.getElementById(secondFour.elementID).classList.remove('doubled');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector('#' + firstFour.elementID).classList.add('doubled');
+  document.getElementById(secondFour.elementID).classList.add('doubled');
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(500);
+
+  new Die(4, `#player-area .new-die-box`);
+
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  await typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'Three of the same die in a lane have each value',
+      },
+      {
+        string: 'tripled.',
+        sectionClass: 'triple-color',
+      },
+    ],
+    tutorialTypeSpeed
+  );
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(500);
+
+  let thirdFour = await addDieToLane('player', 4, 0, true);
+  document.querySelector('#' + firstFour.elementID).classList.remove('doubled');
+  document.getElementById(secondFour.elementID).classList.remove('doubled');
+  document.getElementById(firstFour.elementID).classList.add('tripled');
+  document.getElementById(secondFour.elementID).classList.add('tripled');
+  document.getElementById(thirdFour.elementID).classList.add('tripled');
+  await pause(userPreferences.animationSpeed);
+  document.getElementById(firstFour.elementID).classList.remove('tripled');
+  document.getElementById(secondFour.elementID).classList.remove('tripled');
+  document.getElementById(thirdFour.elementID).classList.remove('tripled');
+  await pause(userPreferences.animationSpeed);
+  document.getElementById(firstFour.elementID).classList.add('tripled');
+  document.getElementById(secondFour.elementID).classList.add('tripled');
+  document.getElementById(thirdFour.elementID).classList.add('tripled');
+  await pause(userPreferences.animationSpeed);
+  document.getElementById(firstFour.elementID).classList.remove('tripled');
+  document.getElementById(secondFour.elementID).classList.remove('tripled');
+  document.getElementById(thirdFour.elementID).classList.remove('tripled');
+  await pause(userPreferences.animationSpeed);
+  document.getElementById(firstFour.elementID).classList.add('tripled');
+  document.getElementById(secondFour.elementID).classList.add('tripled');
+  document.getElementById(thirdFour.elementID).classList.add('tripled');
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(1000);
+
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  await typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'If you place a die that matches one or more',
+      },
+      {
+        string: 'in your opponent\'s same lane...',
+        sectionClass: 'bold',
+      },
+    ],
+    tutorialTypeSpeed
+  );
+  
+  let attackingDie = await playDemoTurn('player', 3, 2);
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+  
+  await pause(200);
+
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  await typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'ALL of your opponent\'s matching dice',
+      },
+      {
+        string: 'are destroyed',
+        sectionClass: 'bold',
+      },
+    ],
+    tutorialTypeSpeed
+  );
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(500);
+  console.log('att', attackingDie)
+  console.log('doom', doomedDie)
+  document.querySelector(`#${attackingDie.elementID}`).classList.add('angry');
+  document.querySelector(`#${doomedDie.elementID}`).classList.add('angry');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector(`#${attackingDie.elementID}`).classList.remove('angry');
+  document.querySelector(`#${doomedDie.elementID}`).classList.remove('angry');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector(`#${attackingDie.elementID}`).classList.add('angry');
+  document.querySelector(`#${doomedDie.elementID}`).classList.add('angry');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector(`#${attackingDie.elementID}`).classList.remove('angry');
+
+  destroyDie(`#${doomedDie.elementID}`);
+  await pause(userPreferences.animationSpeed);
+
+  await pause(500);
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  typeSentence(
+    '#tutorial-top-text-area',
+    'typed-sentence',
+    [
+      {
+        string: 'The game ends when either player has',
+      },
+      {
+        string: 'filled their lanes',
+        sectionClass: 'bold',
+      },
+      {
+        string: 'with dice.',
+      },
+    ],
+    tutorialTypeSpeed
+  );
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+
+  await pause(1000);
+
+  await playDemoTurn('opponent', 3, 1);
+  await pause(200);
+  await playDemoTurn('player', 4, 1);
+  await pause(200);
+  await playDemoTurn('opponent', 3, 0);
+  await pause(200);
+  await playDemoTurn('player', 1, 2);
+  await pause(200);
+  await playDemoTurn('opponent', 2, 1);
+  await pause(200);
+  await playDemoTurn('player', 2, 2);
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+  
+  await pause(500);
+
+  document.querySelector('#opponent-area').classList.add('lost');
+  document.querySelector('#player-area').classList.add('won');
+
+  // show 'play again' button?
+}
+
+async function playDemoTurn(contestant, denomination, lane) {
+  if (document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    new Die(denomination, `#${contestant}-area .new-die-box`, true);
+    document.querySelector(`#${contestant}-area .new-die-box`).classList.add('highlighted');
+    await pause(500);
+    document.querySelector(`#${contestant}-area .new-die-box`).classList.remove('highlighted');
+    let newDie = await addDieToLane(contestant, denomination, lane, true);
+    return newDie;
+  } else {
+    console.log('skipped demo turn due to no tutorial')
+  }
+  
+}
+
+document.querySelector('#vs-cpu-button').addEventListener('click', async () => {
+  resetGame();
+  document.querySelector('#title-screen').classList.add('hidden');
   document.querySelector('#lobby-screen').style.display = 'none';
   document.querySelector('#opponent-area').classList.remove('dim');
+  document.querySelector('#header-message').textContent = 'CPU Battle';
+  game.singlePlayer = true;
+  game.opponent.userName = 'CPU';
   document.querySelector('#player-name').textContent = playerState.userName;
   document.querySelector('#opponent-name').textContent = game.opponent.userName;
   await pause(200);
-  console.log('display none?')
-  document.querySelector('#name-entry-screen').style.display = 'none';
-  game.singlePlayer = true;
-  game.opponent.userName = 'CPU';
-  assignHandlers();
+  document.querySelector('#title-screen').style.display = 'none';  
   dealToCPU();
 });
+document.querySelector('#how-to-play-button').addEventListener('click', async () => {
+  document.querySelector('#lobby-screen').style.display = 'none';
+  document.querySelector('#opponent-area').classList.remove('dim');
+  await pause(100);
+  document.querySelector('#game-area').classList.add('demo-mode');
+  document.querySelector('#title-screen').classList.add('hidden');
+  document.querySelector('#header').classList.add('hidden');
+  document.querySelector('#tutorial-screen').classList.add('showing');
+  await pause(500);
+  playTutorial();
+});
+document.querySelector('#tutorial-exit-button').addEventListener('click', async () => {
+  document.querySelector('#tutorial-top-text-area').innerHTML = '';  
+  document.querySelector('#opponent-area').classList.add('dim');
+  document.querySelector('#game-area').classList.remove('demo-mode');
+  document.querySelector('#title-screen').classList.remove('hidden');
+  document.querySelector('#header').classList.remove('hidden');
+  resetGame();
+  document.querySelector('#tutorial-screen').classList.remove('showing');
+  await pause(500);
+  document.querySelector('#lobby-screen').style.display = 'flex';
+});
+document.querySelector('#back-to-title-button').addEventListener('click', async () => {
+  if (playerState.status === 'ready') {
+    lobbyPanel.classList.remove('searching');
+  } else if (playerState.status === 'confirming') {
+    return;
+  }
+  playerState.status = 'title';
+  await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+  document.querySelector('#title-screen').style.display = 'grid';
+  await pause(50);
+  document.querySelector('#title-screen').classList.remove('hidden');
+  await pause(50);
+  document.querySelector('#lobby-screen').classList.add('hidden');
+});
+document.querySelector('#options-button').addEventListener('click', async () => {
+  document.querySelector('#options-screen').classList.add('showing'); 
+});
+document.querySelector('#options-exit-button').addEventListener('click', async () => {
+  document.querySelector('#options-screen').classList.remove('showing');
+});
 
-// document.querySelector('#name-entry-screen').addEventListener('pointerdown', async () => {
-//   console.green('clicked');
-// });
 
 // init();

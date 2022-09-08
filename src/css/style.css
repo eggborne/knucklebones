@@ -60,6 +60,7 @@ table {
 	--die-size: calc(var(--die-lane-width) * 0.8);
 	--die-animation-speed: 200ms;
 	--border-width: calc(var(--die-size) / 24);
+	--button-height: calc(var(--header-height) * 1.5);
 }
 
 body {
@@ -72,10 +73,10 @@ body {
 	max-width: 100%;
 	height: var(--actual-height);
 	min-height: var(--actual-height);
-	/* -webkit-user-select: none;
+	-webkit-user-select: none;
 	-khtml-user-select: none;
 	-moz-user-select: -moz-none;
-	-o-user-select: none; */
+	-o-user-select: none;
 	user-select: none;
 	overflow: hidden;
 	overscroll-behavior: contain;
@@ -88,9 +89,33 @@ main {
 	height: var(--actual-height);
 	flex-direction: column;
 }
+.title-die {
+	position: fixed;
+	top: var(--header-height);
+	left: calc(var(--die-size) * -2);
+	scale: 1.5 !important;
+	animation-delay: 130ms;
+	animation-duration: 950ms;
+  animation-name: streak;
+	animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-direction: alternate;
+	transition: 0 !important;
+	opacity: 0.9;
+	z-index: 4;
+	pointer-events: none;
+}
 #game-area {
 	flex: 1;
 	background-color: var(--game-bg-color);
+	z-index: 1;
+	transition: transform 200ms ease;
+}
+#game-area.demo-mode {
+	transform: scale(0.65) translateY(calc(var(--header-height) * 0.5));
+	pointer-events: none;
+	z-index: 4;
+	box-shadow: 0 0 calc(var(--die-size)) rgba(0, 0, 0, 0.383);
 }
 
 .turn-area {
@@ -125,7 +150,7 @@ main {
 	position: absolute;
 	height: var(--turn-area-height);
 	width: 100%;
-	background-color: rgba(255, 255, 255, 0.8);
+	background-color: rgba(134, 134, 134, 0.8);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -200,6 +225,12 @@ main {
 	flex-direction: column-reverse;
 	grid-row-start: 2;
 }
+/* #opponent-area .die-lane:nth-child(1) {
+	grid-column-start: 3;
+}
+#opponent-area .die-lane:nth-child(3) {
+	grid-column-start: 1;
+} */
 #player-area .die-lane {
 	justify-content: start;
 }
@@ -309,6 +340,43 @@ main {
 .die.tripled {
 	background-color: rgb(200, 147, 236);
 }
+.die::before {
+	content: ' ';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	font-size: calc(var(--die-size) / 2);
+	font-weight: bold;
+	text-shadow: 0 0 2px black;
+	opacity: 0;
+	scale: 0.8;
+	transition: all var(--die-animation-speed) ease;
+}
+.die.doubled::before, .die.tripled::before {	
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	transform-origin: 50% 50%;
+	font-size: calc(var(--die-size) / 2);
+	font-weight: bold;
+	text-shadow: 0 0 2px black;
+	opacity: 0.6;
+	scale: 1;
+}
+.die.doubled::before {
+	content: 'x2';
+}
+.die.tripled::before {
+	content: 'x3';
+}
+.die.doubled::after {
+	background-color: rgb(201, 206, 124);
+}
+.die.tripled::after {
+	background-color: rgb(200, 147, 236);
+}
 .die.showing {
 	scale: 1;
 }
@@ -356,12 +424,10 @@ header, footer {
 	padding: 0 calc(var(--header-height) / 4);
 	z-index: 1;
 }
-
 header {
 	height: var(--header-height);
 	color: #ddd;
 }
-
 footer {
 	height: var(--footer-height);
 	top: unset;
@@ -403,6 +469,25 @@ footer {
 	transition: transform 300ms ease;
 	transform: scale(1);
 }
+#title-legend > div.revealed {
+	transition: transform 500ms ease;
+	transform: scale(1) translateY(0);
+}
+#title-footer {
+	background-color: unset;
+	justify-content: center;
+	color: rgba(255, 255, 255, 0.3);
+}
+#title-footer i {
+	position: absolute;
+	bottom: calc(var(--header-height) / 5);
+	right: calc(var(--header-height) / 5);
+	font-size: calc(var(--header-height) / 1.5);
+}
+#title-footer a {
+	text-decoration: none;
+	color: rgba(247, 255, 245, 0.5);
+}
 
 .modal {
 	position: fixed;
@@ -440,7 +525,7 @@ footer {
 	width: calc(var(--die-size) * 3);
 	height: calc(var(--die-size) * 3);
 	font-size: calc(var(--die-size) / 2);
-	border: var(--border-width) solid rgb(162, 159, 159);
+	border: var(--border-width) solid rgb(126, 126, 126);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -575,7 +660,7 @@ button#reject-game-button {
 	flex-direction: column;
 	align-items: stretch;
 	justify-content: space-between;
-	transition: filter 200ms ease, opacity 200ms ease;
+	transition: transform 200ms ease, filter 200ms ease, opacity 200ms ease;
 	z-index: 2;
 
 	/* display: none; */
@@ -586,6 +671,7 @@ button#reject-game-button {
 }
 #lobby-screen.hidden {
 	opacity: 0;
+	pointer-events: none;
 }
 #user-list-area {
 	background-color: rgb(45, 54, 57);
@@ -704,21 +790,69 @@ button#reject-game-button {
 }
 #lobby-control-panel {
 	width: var(--play-area-width);
+	height: calc(var(--button-height) * 1.5);
 	background-color: rgb(63, 39, 39);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
-#toggle-ready-button, .title-button {
-	height: calc(var(--header-height) * 1.5);
+#lobby-control-panel.searching {
+	animation-duration: 1000ms;
+  animation-name: flashgreen;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+#lobby-control-panel::after {
+	content: 'searching for opponent...';
+	color: green;
+	position: absolute;
+	transform: translateY(calc(var(--button-height) * -1));
+	opacity: 0;
+	transition: opacity 500ms ease;
+}
+#lobby-control-panel.searching::after {
+	opacity: 1;
+}
+#lobby-control-panel.searching #back-to-title-button {
+	opacity: 0;
+	pointer-events: none;
+}
+.title-button {
+	height: var(--button-height);
 	width: calc(var(--header-height) * 4);
-	font-size: calc(var(--header-height) / 2);
+	font-size: calc(var(--header-height) / 2);	
 	text-shadow: 0px 0px calc(var(--border-width) * 2) rgba(0, 0, 0, 0.6);
+	color: white;
+}
+#toggle-ready-button {
+	background: green;
+	transition: background-color 500ms ease;
+}
+#back-to-title-button {
+	position: absolute;
+	bottom: calc(var(--button-height) / 4);
+	left: calc(var(--button-height) / 5);
+	background: rgb(206, 169, 169);
+	width: var(--button-height);
+	transition: opacity 500ms ease;
+}
+#lobby-control-panel.searching #toggle-ready-button {
+	background: rgb(157, 58, 19);
 }
 #enter-lobby-button {
 	background: rgb(117, 139, 117);
+	width: calc(var(--header-height) * 5);
 }
-#name-entry-screen {
+#how-to-play-button {
+	background: rgb(158, 118, 186);
+}
+#vs-cpu-button {
+	background: rgb(130, 161, 192);
+}
+#options-button {
+	background: rgb(165, 123, 102);
+}
+#title-screen {
 	background-color: rgb(21, 40, 21);
 	position: absolute;
 	top: 0;
@@ -727,30 +861,37 @@ button#reject-game-button {
 	display: grid;
 	justify-items: center;
 	align-items: center;
-	grid-template-rows: 25% 35% 1fr min-content min-content;
-	row-gap: 5%;
-	padding-bottom: 10%;
-	transition: opacity 200ms ease;
-	z-index: 3;
+	grid-template-rows: 20% 32% min-content 1fr min-content;
+	row-gap: 3%;
+	/* padding-bottom: 10%; */
+	transition: transform 200ms ease, opacity 200ms ease;
 	pointer-events: all;
-
-	/* display: none; */
-
+	z-index: 5;
 }
-#name-entry-screen.hidden {
+#title-screen.hidden {
 	opacity: 0;
+	pointer-events: none;
+}
+#lower-title-button-area {
+	display: flex;
+	height: 100%;
+	flex-direction: column;
+	justify-content: space-evenly;
+	padding-top: calc(var(--button-height) / 8);
 }
 #multiplayer-login-area {
 	height: 100%;
+	width: calc(var(--play-area-width) * 0.8);
 	display: grid;
-	grid-template-rows: var(--header-height) 5% 1fr min-content;
+	grid-template-rows: var(--header-height) min-content 0.8fr 1fr;
 	justify-items: center;
-	row-gap: 5%;
-	padding-bottom: 10%;
-	border: var(--border-width) solid rgba(0, 0, 0, 0.127);
-	background-color: rgba(0, 0, 0, 0.086);
+	align-items: center;
+	/* row-gap: 5%; */
+	/* padding-bottom: 10%; */
+	border: var(--border-width) solid rgba(0, 0, 0, 0.535);
+	background-color: rgba(0, 0, 0, 0.303);
 	border-radius: calc(var(--die-size) / 3);
-	padding: calc(var(--die-size) / 3);
+	/* padding: calc(var(--die-size) / ); */
 }
 #multiplayer-legend {
 	font-size: calc(var(--header-height) / 1.75);
@@ -758,7 +899,7 @@ button#reject-game-button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	align-self: start;
+	/* align-self: start; */
 }
 #known-user-confirmation {
 	font-size: 75%;
@@ -769,10 +910,156 @@ button#reject-game-button {
 #name-entry-field {
 	width: calc(var(--header-height) * 5);
 	height: calc(var(--header-height) / 1.5);
-	padding: calc(var(--header-height) / 8);
+	padding: calc(var(--header-height) / 8) 0;
 	font-size: calc(var(--header-height) / 2);;
 	text-align: center;
 }
+.typed-sentence {
+	width: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	flex-direction: row;
+	/* align-items: center; */
+	justify-content: center;
+	height: min-content;
+	font-size: calc(var(--play-area-width) / 20);
+	/* border: 1px solid; */
+}
+.typed-character {
+	transform: scale(0);
+	transition: transform 100ms ease;
+}
+.typed-character.revealed {
+	transform: scale(1);
+}
+.typed-word {
+	display: flex;
+	flex-direction: row;
+	margin-bottom: 0.5rem;
+}
+.typed-word.bold {
+	font-weight: bold;
+	color: rgb(142, 255, 142);
+	text-shadow: 0 0 4px black;
+}
+.typed-word.double-color {
+	font-weight: bold;
+	color: rgb(201, 206, 124);
+	text-shadow: 0 0 4px black;
+}
+.typed-word.triple-color {
+	font-weight: bold;
+	color: rgb(200, 147, 236);
+	text-shadow: 0 0 4px black;
+}
+#tutorial-top-text-area {
+	width: 100%;
+	flex: 1;
+	display: grid;
+	grid-template-rows: min-content min-content;
+	padding: 0.5rem 1.5rem;
+	row-gap: 0.5rem;
+	/* background: gray; */
+}
+#tutorial-bottom-area {
+	height: var(--header-height);
+	width: 100%;
+	display: grid;
+	grid-template-columns: min-content min-content min-content;
+	column-gap: calc(var(--header-height) / 3);
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+}
+#tutorial-image-area {
+	width: 100%;
+	height: calc(((var(--actual-height) - (var(--header-height) * 2))) * 0.65);
+}
+.progress-dot {
+	width: calc(var(--header-height) /2);
+	height: calc(var(--header-height) /2);
+	border-radius: 50%;
+	background-color: rgba(128, 128, 128);
+	opacity: 0.3;
+	transition: opacity 200ms ease;
+}
+.progress-dot.selected {
+	opacity: 1;
+}
+.question-mark {
+	position: absolute;
+	font-size: calc(var(--play-area-width) / 2);
+	transform: translateY(calc(var(--die-size) * -0.8));
+	font-weight: bold;
+	color: white;
+	text-shadow: 0 0 calc(var(--border-width) * 2) black;
+	z-index: 1;
+	opacity: 0.5;
+	animation-name: wave;
+	animation-duration: 500ms;
+	animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+#tutorial-screen {
+	position: absolute;
+	width: 100vw;
+	height: var(--actual-height);
+	background-color: rgb(70, 40, 40);
+	display: grid;
+	grid-template-columns: 100vw;
+	grid-template-rows: 10% 1fr 13%;
+	align-items: stretch;
+	justify-items: center;
+	opacity: 1;
+	/* pointer-events: none; */
+	z-index: 0;
+}
+#tutorial-screen.showing {
+	opacity: 1;
+	transition: opacity 200ms ease;
+	z-index: 4;
+}
+#tutorial-header, #tutorial-footer, #options-header, #options-footer {
+	font-size: calc(var(--header-height) / 1.25);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: transparent;
+}
+#tutorial-button {
+	height: 55%;
+}
+#tutorial-body {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-between;
+	justify-self: stretch;
+}
+
+#options-screen {
+	position: absolute;
+	width: 100vw;
+	height: var(--actual-height);
+	background-color: rgb(40, 60, 70);
+	display: grid;
+	grid-template-columns: 100vw;
+	grid-template-rows: 10% 1fr 13%;
+	align-items: stretch;
+	justify-items: center;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 500ms ease;
+	z-index: 6;
+}
+
+#options-screen.showing {
+	opacity: 1;
+	transition: opacity 200ms ease;
+	pointer-events: all;
+}
+
 
 @keyframes pulseborder {
   from{
@@ -796,6 +1083,14 @@ button#reject-game-button {
   }
   to {
 		transform: scale(1.1);    
+  }
+}
+@keyframes wave {
+  from {
+    transform: translate(calc(var(--die-size) * -0.5), calc(var(--die-size) * -1.1)) rotate(-12deg)
+  }
+  to {
+		transform: translate(calc(var(--die-size) * 0.5), calc(var(--die-size) * -1.1)) rotate(12deg)
   }
 }
 @keyframes bounce {
@@ -827,19 +1122,41 @@ button#reject-game-button {
 		letter-spacing: 1px;
   }
 }
-
+@keyframes flashgreen { 
+  from {
+    /* background-color: rgb(63, 39, 39) */
+    background-color: rgb(45, 71, 27);
+  }
+  to {
+		background-color: rgb(68, 111, 40);
+  }
+}
+@keyframes streak { 
+  from {
+    transform: translateX(0) rotate(0deg)
+  }
+  to {
+		transform: translateX(100vw) rotate(360deg)
+  }
+}
 
 @media (orientation: landscape) {
 
 }
+
 footer {
 	justify-content: end;
 }
 #debug {
+	position: fixed;
+	bottom: 2%;
+	right: 4%;
 	font-size: 10pt;
 	opacity: 0.5;
 	z-index: 12;
 	color: rgb(150, 106, 25);
+	z-index: 4;
+	color: white;
 	/* display: none; */
 }
 
