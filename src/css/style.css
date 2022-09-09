@@ -94,15 +94,15 @@ main {
 	top: var(--header-height);
 	left: calc(var(--die-size) * -2);
 	scale: 1.5 !important;
-	animation-delay: 130ms;
-	animation-duration: 950ms;
+	animation-delay: 20ms;
+	animation-duration: 850ms;
   animation-name: streak;
 	animation-timing-function: linear;
   animation-iteration-count: 1;
   animation-direction: alternate;
 	transition: 0 !important;
 	opacity: 0.9;
-	z-index: 4;
+	z-index: 2;
 	pointer-events: none;
 }
 #game-area {
@@ -112,7 +112,7 @@ main {
 	transition: transform 200ms ease;
 }
 #game-area.demo-mode {
-	transform: scale(0.65) translateY(calc(var(--header-height) * 0.5));
+	transform: scale(0.7) translateY(calc(var(--header-height) * 0.65));
 	pointer-events: none;
 	z-index: 4;
 	box-shadow: 0 0 calc(var(--die-size)) rgba(0, 0, 0, 0.383);
@@ -126,7 +126,7 @@ main {
 	height: var(--turn-area-height);
 }
 #opponent-area::before {
-	content: 'has not clicked Start';
+	content: 'waiting for opponent...';
 	color: white;
 	font-size: calc(var(--header-height) / 2);
 	position: absolute;
@@ -266,7 +266,9 @@ main {
 	justify-content: center;
 }
 .contestant-score {
-	font-size: calc(var(--die-lane-width) / 2)
+	font-size: calc(var(--die-lane-width) / 1.5);
+	font-weight: bold;
+	text-shadow: 0 0 calc(var(--die-lane-width) / 8) rgba(0, 0, 0, 0.396);
 }
 .contestant-score::after {
 	content: '';
@@ -299,6 +301,13 @@ main {
 .die-lane.highlighted {
 	border-color: rgba(149, 214, 152, 0.724);
 }
+.floating-number {
+	position: absolute;
+	top: 0;
+	font-size: 200%;
+	font-weight: bold;
+	color: rgb(0, 115, 0);
+}
 .die {
 	height: var(--die-size);
 	width: var(--die-size);
@@ -310,6 +319,10 @@ main {
 	scale: 0;
 	filter: drop-shadow(0 0 calc(var(--border-width) * 2) rgba(0, 0, 0, 0.25));
 	transition: scale var(--die-animation-speed) ease, background 150ms ease;
+	
+	font-size: 100%;
+	font-weight: bold;
+	color: rgb(0, 115, 0);
 }
 #title-die-area {
 	width: calc(var(--die-size) * 3.5);
@@ -619,6 +632,7 @@ footer {
 } */
 button {
 	border-radius: calc(var(--header-height) / 6);
+	color: white;
 }
 #confirm-game-modal > button {
 	padding: calc(var(--header-height) / 4);
@@ -822,7 +836,6 @@ button#reject-game-button {
 	width: calc(var(--header-height) * 4);
 	font-size: calc(var(--header-height) / 2);	
 	text-shadow: 0px 0px calc(var(--border-width) * 2) rgba(0, 0, 0, 0.6);
-	color: white;
 }
 #toggle-ready-button {
 	background: green;
@@ -832,7 +845,8 @@ button#reject-game-button {
 	position: absolute;
 	bottom: calc(var(--button-height) / 4);
 	left: calc(var(--button-height) / 5);
-	background: rgb(206, 169, 169);
+	background: rgba(206, 169, 169, 0.3);
+	border: 0;
 	width: var(--button-height);
 	transition: opacity 500ms ease;
 }
@@ -843,17 +857,20 @@ button#reject-game-button {
 	background: rgb(117, 139, 117);
 	width: calc(var(--header-height) * 5);
 }
-#how-to-play-button {
-	background: rgb(158, 118, 186);
-}
 #vs-cpu-button {
 	background: rgb(130, 161, 192);
+	width: calc(var(--header-height) * 5);
 }
-#options-button {
+#how-to-play-button, #tutorial-exit-button {
+	background: rgb(158, 118, 186);
+	height: calc(var(--button-height) / 1.2);
+}
+#options-button, #options-exit-button  {
 	background: rgb(165, 123, 102);
+	height: calc(var(--button-height) / 1.2);
 }
 #title-screen {
-	background-color: rgb(21, 40, 21);
+	background-color: #152815;
 	position: absolute;
 	top: 0;
 	width: 100%;
@@ -886,12 +903,10 @@ button#reject-game-button {
 	grid-template-rows: var(--header-height) min-content 0.8fr 1fr;
 	justify-items: center;
 	align-items: center;
-	/* row-gap: 5%; */
-	/* padding-bottom: 10%; */
-	border: var(--border-width) solid rgba(0, 0, 0, 0.535);
-	background-color: rgba(0, 0, 0, 0.303);
+	border: var(--border-width) solid rgba(0, 0, 0, 0.4);
+	background-color: rgba(0, 0, 0, 0.2);
 	border-radius: calc(var(--die-size) / 3);
-	/* padding: calc(var(--die-size) / ); */
+	box-shadow: 0 0 2rem rgba(0, 0, 0, 0.178);
 }
 #multiplayer-legend {
 	font-size: calc(var(--header-height) / 1.75);
@@ -1051,13 +1066,14 @@ button#reject-game-button {
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity 500ms ease;
-	z-index: 6;
+	z-index: 0;
 }
 
 #options-screen.showing {
 	opacity: 1;
 	transition: opacity 200ms ease;
 	pointer-events: all;
+	z-index: 6;
 }
 
 
@@ -1148,14 +1164,14 @@ footer {
 	justify-content: end;
 }
 #debug {
-	position: fixed;
+	position: absolute;
 	bottom: 2%;
 	right: 4%;
 	font-size: 10pt;
 	opacity: 0.5;
 	z-index: 12;
 	color: rgb(150, 106, 25);
-	z-index: 4;
+	z-index: 3;
 	color: white;
 	/* display: none; */
 }

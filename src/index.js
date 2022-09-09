@@ -26,10 +26,9 @@ window.onload = async () => {
   populateUserList();
   await printLobbyMessages(10);
   document.querySelector('#lobby-chat-window').style.setProperty('scroll-behavior', 'smooth');
-  await pause(50);
-  // document.querySelector('#title-legend').classList.add('showing');
+  // await pause(50);
   animateTitle();
-  pause(200);
+  await pause(200);
   assignHandlers();
   startPolling();
 };
@@ -93,11 +92,9 @@ let currentDieID = 0;
 function assignHandlers() {
   // for testing
 
-  document.querySelector('#player-area .new-die-box').addEventListener('pointerdown', () => {
+  // document.querySelector('#player-area .new-die-box').addEventListener('pointerdown', () => {
     // if (!game.player.atBat) { dealDie('player', randomInt(1, 6)) };
-    document.querySelector('#opponent-area .die-lane:nth-child(3)').classList.add('highlighted');
-    document.querySelector('#player-area .die-lane:nth-child(3)').classList.add('highlighted');
-  });
+  // });
   // document.querySelector('#opponent-area .new-die-box').addEventListener('pointerdown', () => {
   //   if (!game.opponent.atBat) { dealDie('opponent', randomInt(1, 6)) }
   // });
@@ -237,10 +234,11 @@ async function populateUserList() {
 }
 
 const userPreferences = {
-  animationSpeed: 200
+  animationSpeed: 200,
+  CPUTurnSpeed: 500,
 }
 
-const pollInterval = 1000;
+const pollInterval = 500;
 
 async function performInitialHandshake(enteredName) {  
   console.warn('---------> INITIAL handshake!');
@@ -374,9 +372,11 @@ function startPolling() {
       } else { // both have flipped and the game has started
         let currentGameData = await getGameData(game.gameID);
         if (!game.deals) { // first turn
-          if (!game.player.atBat && playerState.visitorID == game.firstPlayer) {            
+          if (!game.player.atBat && playerState.visitorID == game.firstPlayer) {     
+            console.log('DEALING a', game.atBat, 'to player on first turn');
             dealDie('player', game.atBat);
           } else if (!game.opponent.atBat) {
+            console.log('DEALING a', game.atBat, 'to opponent on first turn');
             dealDie('opponent', game.atBat);
           }          
         } else {
@@ -549,7 +549,7 @@ function validateName(e) {
 class Die {
   constructor(denomination, targetDivQuery, lane, demo) {
     if (demo && !document.querySelector('#tutorial-screen').classList.contains('showing')) {
-      console.green('cancelled die creation because no tutorial');
+      console.green('cancelled die creation because tutorial not showing');
     }
     this.denomination = denomination;
     this.lane = lane;
@@ -649,9 +649,14 @@ class Die {
     }
     let dieClass = lane !== undefined ? `die value-${denomination} lane-${lane} active` : `die value-${denomination}`;
     let newDieHTML = `
-    <div id="${this.elementID}" class="${dieClass}">${dieDotsHTML}</div>
+      <div id="${this.elementID}" class="${dieClass}">${dieDotsHTML}</div>
     `;
+    // let newDieHTML = `
+    //   <div id="${this.elementID}" class="${dieClass}">D-${denomination}|L${lane !== undefined ? 'L' + lane : ''}-</div>
+    // `;
     document.querySelector(targetDivQuery).innerHTML += newDieHTML;
+    // document.querySelector(`#${this.elementID}`).innerHTML += `<p class='floating-number'>${this.elementID}</p>`;
+    ;
     const dieElement = document.querySelector(`#${this.elementID}`)
     setTimeout(() => {
       dieElement.classList.add('showing');
@@ -679,14 +684,23 @@ async function sendMove(lane) {
   dealDie('opponent', parseInt(nextDie));
 }
 
-async function destroyDie(query) {
+async function destroyDie(query, crosscheck) {
+  console.green('destroyDie called');
   const dieElement = document.querySelector(query);
+  if (!dieElement) {
+    console.error('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> destroyDie was passed', query, 'to produce undefined document.querySelector(query)');
+  }
+  if (crosscheck) {
+    console.green(`DDDDDDDDDDDDDDESTROYING query ${query} via checkForCrossMatches <<<<<<<<<<<<<<<<<<<<<<`)
+  }
   dieElement.classList.remove('showing');
   await pause(userPreferences.animationSpeed);
   dieElement.parentNode.removeChild(dieElement);
 }
 
 async function dealDie(contestant, denomination) {
+  console.green('dealDie DEALING a', denomination, 'to', contestant);
+  console.log('dealDie DEALING a', denomination, 'to', contestant);
   new Die(denomination, `#${contestant}-area .new-die-box`);
   game[contestant].atBat = denomination;
   let availableLanes = [...document.querySelectorAll(`#${contestant}-area .die-lane`)].filter((lane) => [...lane.children].length < 3);
@@ -705,19 +719,23 @@ const totalDiceInPlay = (contestant) =>
   [...game[contestant].laneElements[0], ...game[contestant].laneElements[1], ...game[contestant].laneElements[2]].length;
 
 async function addDieToLane(contestant, denomination, lane, demo) {
+  console.warn(contestant, 'ADDING DEALING a', denomination, 'to', contestant, 'lane', lane);
   if (demo && !document.querySelector('#tutorial-screen').classList.contains('showing')) {
     console.log('cancelled addDieToLane due to tutorial closed');
     return;
   }
   game[contestant].lanes[lane].push(denomination); // get rid of game[contestant].lanes
 
-  const newDie = new Die(denomination, `#${contestant}-area .die-lane:nth-child(${lane + 1})`, lane);
+  let chosenLane = lane + 1;
+
+  const newDie = new Die(denomination, `#${contestant}-area .die-lane:nth-child(${chosenLane})`, lane);
   game[contestant].laneElements[lane].push(newDie);
+  
   document.querySelector(`#${contestant}-area .new-die-box`).classList.remove('highlighted');
   [...document.querySelectorAll(`#${contestant}-area .die-lane`)].forEach((lane) => {
     lane.classList.remove('available');
     lane.classList.remove('highlighted');
-  });
+  });  
   await destroyDie(`#${contestant}-area .new-die-box .die`);
   game[contestant].atBat = undefined;
   updateContestantScore(contestant);
@@ -746,16 +764,18 @@ async function addDieToLane(contestant, denomination, lane, demo) {
         }
       }
     }
-  } else {
-    return newDie;
+  } else {    
   }
+  return newDie;
 }
 
 function printLaneTotal(contestant, lane) {
+  console.error('PRINTING LANE TOTALS FOR', contestant, 'LANE', lane, '-------------------')
   let laneArray = [];
   [...game[contestant].laneElements[lane]].forEach((element) => {
     laneArray.push(element.denomination);
   });
+  console.log('printLaneTotal made laneArray', laneArray)
   let totalElement = document.querySelector(`#${contestant}-area .die-lane-total:nth-child(${lane + 1})`);
   if (!laneArray.length) {
     totalElement.innerHTML = 0;
@@ -809,26 +829,66 @@ function updateContestantScore(contestant) {
   const scoreElement = document.querySelector(`#${contestant}-area .contestant-score`);
   let score = 0;
   for (let i = 0; i < 3; i++) {
-    score += printLaneTotal(contestant, i);
+    score += printLaneTotal(contestant, i);    
   }
   scoreElement.innerHTML = score;
   game[contestant].totalScore = score;
 }
 
 async function checkForCrossMatches(aggressor, attackingDie) {
+  const nemesis = aggressor === 'player' ? 'opponent' : 'player';
+  console.green('checkForCrossMatches called by', aggressor)
+  console.log('with attackingDie', attackingDie);
+  console.green('----------')
+  let doomedDice = [];
+  let attackerElement = document.querySelector(`#${attackingDie.elementID}`);
+  let oppositeLaneArray = game[nemesis].laneElements[attackingDie.lane];
+  for (const dieIndex in oppositeLaneArray) { // an array which represents a lane
+      let laneMember = oppositeLaneArray[dieIndex]; // a Die() object
+      console.log('laneMemeber is', laneMember);
+      if (attackingDie.denomination == laneMember.denomination) {
+        console.error('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> MATCH!')
+        console.error('attacker', attackingDie, 'and victim', laneMember);
+        doomedDice.push(laneMember);
+      }
+    }
+  console.error('checkForCrossMatches produced doomedDice', doomedDice);
+  if (doomedDice.length) {
+    attackerElement.classList.add('angry');
+    for (const ind in doomedDice) {
+      let victimObj = doomedDice[ind];
+      let victimElement = document.querySelector(`#${victimObj.elementID}`);
+      victimElement.classList.add('angry');
+      destroyDie(`#${victimObj.elementID}`, true);
+      console.warn('before doomedDice loop', ind, 'game[nemesis].laneElements is', game[nemesis].laneElements);
+      oppositeLaneArray.splice(oppositeLaneArray.indexOf(victimObj), 1);
+      console.warn('after doomedDice loop', ind, 'game[nemesis].laneElements is now', game[nemesis].laneElements);
+    }
+    await pause(userPreferences.animationSpeed);
+    attackerElement.classList.remove('angry');
+    await pause(userPreferences.animationSpeed);
+    updateContestantScore(nemesis);
+  }
+  console.error('checkForCrossMatches END -------------------------------------');
+}
+
+async function checkForCrossMatches2(aggressor, attackingDie) {
+  console.green('checkForCrossMatches called');
   let doomedDice = [];
   let doomLaneIndex;
   const nemesis = aggressor === 'player' ? 'opponent' : 'player';
 
   game[aggressor].laneElements.forEach((laneArray, i) => {
     const oppositeLane = game[nemesis].laneElements[i];
+    console.log('checkForCrossMatches checking oppositeLane', i, 'contents', oppositeLane);
     laneArray.forEach((die) => {
       let dieValue = die.denomination;
       oppositeLane.forEach((oppositeDie) => {
         let oppositeDieValue = oppositeDie.denomination;
         if (oppositeDieValue === dieValue) {
-          console.error('MATCH', oppositeDieValue, 'and', dieValue, 'in lane', i);
+          console.error('MATCH', oppositeDieValue, 'and', dieValue, 'in lane (doomLaneIndex)', i);
           doomedDice = [...document.querySelectorAll(`#${nemesis}-area .lane-${i} .value-${dieValue}`)];
+          console.error('doomedDice is now', doomedDice)
           doomLaneIndex = i;
           // game[nemesis].lanes[i] = game[nemesis].lanes[i].filter((val) => val !== dieValue);
         }
@@ -836,16 +896,31 @@ async function checkForCrossMatches(aggressor, attackingDie) {
     });
   });  
   let attacker = document.querySelector(`#${attackingDie.elementID}`);
-  doomedDice.forEach(async (die) => {
+  if (doomedDice.length) {
+    console.error('checkForCrossMatches plans to go through doomedDice', doomedDice);
+    console.error('for the matches it found for', attacker);
+  } else {
+    console.log('doomedDice came out empty when checking attacker', attacker);
+  }
+  for (let die in doomedDice) {
+    die = doomedDice[die]
+    console.log('checking doomedDice die', die)
     let doomLane = game[nemesis].laneElements[doomLaneIndex];
+    console.error('doomlane is ind', doomLaneIndex, doomLane);
+    console.error('of game[nemesis].laneElements', game[nemesis].laneElements);
     doomLane.splice(doomLane.indexOf(die), 1);
     die.classList.add('angry');
     attacker.classList.add('angry');
-    die.classList.remove('showing');
+    // die.classList.remove('showing');
+    // await pause(userPreferences.animationSpeed);
+    // die.parentNode.removeChild(die);
+    console.error(`checkForCrossMatches calling destroyDie on`, die);
+    console.error(`attacker is`, attacker);
     await pause(userPreferences.animationSpeed);
-    die.parentNode.removeChild(die);
+    await destroyDie('#' + die.id, true);
+    await pause(userPreferences.animationSpeed);
     attacker.classList.remove('angry');
-  });
+  }
   if (doomedDice.length) {
     updateContestantScore(nemesis);
   }
@@ -853,28 +928,42 @@ async function checkForCrossMatches(aggressor, attackingDie) {
 }
 
 function colorMatchingDice(contestant) {
+  console.green('colorMatchingDice called');
+  console.log('colorMatchingDice is analyzing');
+  console.log(contestant, 'laneElements', game[contestant].laneElements);
   const allActiveDice = [...game[contestant].laneElements[0], ...game[contestant].laneElements[1], ...game[contestant].laneElements[2]];
+  console.log(contestant, 'allActiveDice', allActiveDice);
   const organizedDice = [[], [], []];
   allActiveDice.forEach((die) => {
+    const dieEl = document.querySelector(`#${die.elementID}`);
     if (organizedDice[die.lane].indexOf(die.denomination) === -1) {
       organizedDice[die.lane].push(die.denomination);
     } else {
       const numberOfDuplicates = organizedDice[die.lane].filter((e) => e === die.denomination).length;
+      console.warn('colorMatchingDice found', numberOfDuplicates, 'duplicates for', die.denomination, 'in', contestant, 'lane', die.lane);
       let specialClass;
       if (numberOfDuplicates === 2) {
-        specialClass = 'tripled'
+        specialClass = 'tripled';
       } else {
         specialClass = 'doubled';
       }
       organizedDice[die.lane].push(die.denomination);
-      allActiveDice.filter((e) => e.lane === die.lane && e.denomination === die.denomination).forEach((match) => {
-        const matchEl = document.querySelector(`#${match.elementID}`);
-        if (!matchEl.classList.contains(specialClass)) {
-          matchEl.classList.add(specialClass);
-        } else {
-          console.warn('SKIPPING already colored', contestant, match)
-        }
-      });
+      allActiveDice
+        .filter((e) => e.elementID !== die.elementID && e.lane == die.lane && e.denomination == die.denomination)
+        .forEach((match) => {
+          console.log('determined', match, 'matches', die, 'class to be', specialClass);
+          const matchEl = document.querySelector(`#${match.elementID}`);
+          if (matchEl) {
+            if (!matchEl.classList.contains(specialClass)) {
+              matchEl.classList.add(specialClass);
+              dieEl.classList.add(specialClass);
+            } else {
+              // console.warn('SKIPPING already colored', contestant, match);
+            }
+          } else {
+            console.warn('--- match element missing!');
+          }
+        });
     }
   });
 }
@@ -950,8 +1039,8 @@ async function printLobbyMessages(forceHistory) {
     return;
   }
   let highestMessageID = messagesArray[messagesArray.length-1].messageID;
-  playerState.lastMessageSeen = highestMessageID;
   let chatWindow = document.querySelector('#lobby-chat-window');
+  // playerState.lastMessageSeen = highestMessageID;
   messagesArray.forEach((messageRow) => {
     let rawDate = new Date(messageRow.timePosted);
     let convertedTime = rawDate.toLocaleString([], { hour: 'numeric', minute: 'numeric', hour12: true });
@@ -967,55 +1056,15 @@ async function printLobbyMessages(forceHistory) {
     `;
     chatWindow.innerHTML += rowHTML;
   });
-
+  console.log('about to apply highestmessageID', highestMessageID);
+  console.log('when playerState.lastMessageSeen is', playerState.lastMessageSeen);
+  playerState.lastMessageSeen = highestMessageID;
   chatWindow.scrollTop = chatWindow.scrollHeight;
   if (!forceHistory) {
     storeUserState();
   }
 }
 
-// async function getScoresFromDatabase(gameName) {
-//   console.warn('CALLING getScoresFromDatabase');
-//   let calledAt = Date.now();
-//   let response = await axios({
-//     method: 'get',
-//     url: 'https://mikedonovan.dev/csskaboom/php/getscores.php',
-//     headers: {
-//       'Content-type': 'application/x-www-form-urlencoded',
-//     },
-//     params: {
-//       game: gameName,
-//     },
-//   });
-//   let scoreArray = [];
-//   console.log('got response', response)
-//   if (response.data) {
-//     let pairArray = response.data.split(' - ');
-//     for (let item in pairArray) {
-//       let scoreEntry = pairArray[item].split(' ');
-//       if (scoreEntry.length > 3) {
-//         let fixedEntry = [];
-//         fixedEntry[1] = scoreEntry.pop();
-//         fixedEntry[0] = scoreEntry.join(' ');
-//         scoreArray.push(fixedEntry);
-//       } else if (scoreEntry.length === 3) {
-//         scoreArray.push(scoreEntry);
-//       }
-//       scoreEntry[0] = scoreEntry[0].toUpperCase();
-//       scoreEntry[1] = parseInt(scoreEntry[1]);
-//       scoreEntry[2] = parseInt(scoreEntry[2]);
-//     }
-//   } else {
-//     console.log('got a response of VOID :(');
-//     scoreArray = [['void', 1212]];
-//   }
-//   if (scoreArray.length > highScoresShown) {
-//     scoreArray.length = highScoresShown;
-//   }
-//   console.warn('retrieved high scores in', Date.now() - calledAt);
-//   highScores = [...scoreArray];
-//   return scoreArray;
-// }
 async function postNewMove(moveData) {
   const response = await axios({
     method: 'post',
@@ -1232,11 +1281,16 @@ async function assimilateKnownUser() {
     document.querySelector('#known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
   } else {
     console.green('UNKNOWN USER');
+    document.querySelector('#name-entry-field').placeholder = 'Enter a name';
   }
 }
 
 function createTitleDie() {
-  let titleDie = new Die(5, '#main', 0);
+  let titleDie = new Die(5, '#title-screen', 0);
+  document.querySelector(`#${titleDie.elementID}`).classList.add('title-die');
+  setTimeout(() => {
+    document.querySelector('#title-screen').removeChild(document.querySelector(`#${titleDie.elementID}`));
+  }, 900);
   return titleDie;
 }
 
@@ -1271,6 +1325,12 @@ async function typeSentence(destinationQuery, containerClass, stringObjArr, type
   }
 }
 
+async function dealToCPU() {
+  dealDie('opponent', randomInt(1, 6));
+  await pause(userPreferences.animationSpeed + userPreferences.CPUTurnSpeed);
+  makeCPUMove();
+}
+
 async function makeCPUMove() {
   let availableLanes = [];
   game.opponent.laneElements.forEach((arr, i) => {
@@ -1278,13 +1338,7 @@ async function makeCPUMove() {
   });
   let chosenLane = availableLanes[randomInt(0, availableLanes.length - 1)];
   await addDieToLane('opponent', game.opponent.atBat, chosenLane);
-  await pause(200);
   dealDie('player', randomInt(1, 6));
-}
-async function dealToCPU() {
-  dealDie('opponent', randomInt(1, 6));
-  await pause(randomInt(1000, 1000));
-  makeCPUMove();
 }
 
 let tutorialTypeSpeed = 40;
@@ -1541,7 +1595,7 @@ async function playTutorial() {
         string: 'ALL of your opponent\'s matching dice',
       },
       {
-        string: 'are destroyed',
+        string: 'are destroyed.',
         sectionClass: 'bold',
       },
     ],
@@ -1566,7 +1620,6 @@ async function playTutorial() {
   document.querySelector(`#${doomedDie.elementID}`).classList.add('angry');
   await pause(userPreferences.animationSpeed);
   document.querySelector(`#${attackingDie.elementID}`).classList.remove('angry');
-
   destroyDie(`#${doomedDie.elementID}`);
   await pause(userPreferences.animationSpeed);
 
