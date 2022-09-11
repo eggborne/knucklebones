@@ -13,6 +13,9 @@
     <meta name="msapplication-TileColor" content="#152815">
     <meta name="theme-color" content="#152815">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link
+      href='https://fonts.googleapis.com/css?family=Montez|Lobster|Josefin+Sans|Shadows+Into+Light|Pacifico|Amatic+SC:700|Orbitron:400,900|Rokkitt|Righteous|Dancing+Script:700|Bangers|Chewy|Sigmar+One|Architects+Daughter|Abril+Fatface|Covered+By+Your+Grace|Kaushan+Script|Gloria+Hallelujah|Satisfy|Lobster+Two:700|Comfortaa:700|Cinzel|Courgette'
+      rel='stylesheet' type='text/css'>
   </head>
   <body style='opacity: 0'>
   <!-- <body> -->
@@ -20,8 +23,7 @@
       <header id="header">
         <p id='header-message'>
           Multiplayer lobby
-        </p>
-        <button id="clear-cookies-button">clear local storage</button>
+        </p>        
       </header>
       <div id="confirm-game-modal" class="modal">
         <div id="confirm-header">OPPONENT FOUND!</div>
@@ -43,7 +45,83 @@
       </div>
       <div id="options-screen">
         <div id="options-header">Options</div>
-        <div id="options-body"></div>
+        <div id="options-body">
+          <div class="option-row">
+            <div>Full screen</div>
+            <div>
+              <div id="full-screen-switch" class="switch-groove">
+                <div class="die showing switch-knob">
+                  <div class='die-dot-grid'>
+                    <div class='die-dot'></div>
+                    <div class='die-dot'></div>
+                    <div class='die-dot filled'></div>
+                    <div class='die-dot'></div>
+                    <div class='die-dot filled'></div>
+                    <div class='die-dot'></div>
+                    <div class='die-dot filled'></div>
+                    <div class='die-dot'></div>
+                    <div class='die-dot'></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="customization-area">
+            <div class="option-label-row">
+              <div class="option-header">Customizations</div>
+              <div class="option-explanation">Visible to opponents in multiplayer matches</div>
+            </div>
+            <div class="option-row">
+              <div>Player background color</div>
+              <div>
+                <input id="bg-color-input" value="#223b3b" class="color-input" type="color" />
+              </div>
+            </div>
+            <div class="option-row">
+              <div>Die color</div>
+              <div>
+                <input id="die-color-input" value="#f4f4f4" class="color-input" type="color" />
+              </div>
+            </div>
+            <div class="option-row">
+              <div>Die dot color</div>
+              <div>
+                <input id="die-dot-color-input" value="#000000" class="color-input" type="color" />
+              </div>
+            </div>
+            <div id="radius-options-area" class="option-row">
+              <div>Die roundness</div>
+              <div>
+                <input id="die-radius-slider" value="0.12" min=".04" max=".28" step=".01" class="slider" type="range" />
+              </div>
+            </div>
+            <div id="demo-die" class="option-row">
+              <div class="die showing">
+                <div class='die-dot-grid'>
+                  <div class='die-dot filled'></div>
+                  <div class='die-dot'></div>
+                  <div class='die-dot filled'></div>
+                  <div class='die-dot'></div>
+                  <div class='die-dot filled'></div>
+                  <div class='die-dot'></div>
+                  <div class='die-dot filled'></div>
+                  <div class='die-dot'></div>
+                  <div class='die-dot filled'></div>
+                </div>
+              </div>              
+            </div>
+            <div id="username-font-select" class="option-row">
+              <div>Username font</div>
+              <div>
+                <select id="font-select"></select>
+              </div>
+            </div>
+            <div id="demo-username" class="option-row">Player</div>
+          </div>
+          <div class="option-row">
+            <button id="clear-cookies-button" class="title-button">clear local storage</button>
+          </div>
+        </div>
         <div id="options-footer">
           <button id="options-exit-button" class="title-button">Back</button>
         </div>
@@ -71,7 +149,11 @@
           <div><input autocomplete="off" id="name-entry-field" type="text"></input></div>
           <div><button disabled id="enter-lobby-button" class="title-button">Enter Lobby</button></div>
         </div>
-        <button id="vs-cpu-button" class="title-button">VS. CPU</button>
+        <div id="vs-cpu-area">
+          <button id="vs-cpu-button" class="title-button">VS. CPU</button>
+          <!-- <label for="cpu-difficulty-slider">CPU opponent difficulty (between 0 and 10):</label> -->
+          <input type="range" name="cpu-difficulty-slider" id="cpu-difficulty-slider" min="1" max="10" value="1" step="1"/>
+        </div>
         <div id="lower-title-button-area">
           <button id="how-to-play-button" class="title-button">How to Play</button>
           <button id="options-button" class="title-button">Options</button>
@@ -146,7 +228,7 @@
       <footer id="footer">
 
       </footer>
-      <div id='debug'></div>      
     </main>
+    <div id='debug'></div>      
   </body>
 </html>

@@ -18,19 +18,36 @@ require('console-green');
 
 if (process.env.NODE_ENV === 'development') {
   // document.getElementById('debug').style.display = 'block';
+  window.onresize = () => {
+    detectScreen();
+  };
 }
 
+const fonts = ["sans-serif","Montez","Lobster","Josefin Sans","Shadows Into Light","Pacifico","Amatic SC", "Orbitron", "Rokkitt","Righteous","Dancing Script","Bangers","Chewy","Sigmar One","Architects Daughter","Abril Fatface","Covered By Your Grace","Kaushan Script","Gloria Hallelujah","Satisfy","Lobster Two","Comfortaa","Cinzel","Courgette"];
+
 window.onload = async () => {
+  console.error('>>>>>>>>>>>>>>>>>>> ONLOAD >>>>>>>>>>>>>>>>>>>>>')
   detectScreen();
-  document.body.style.opacity = '1';  
-  populateUserList();
+  document.body.style.opacity = '1';
+  await populateUserList(true);
   await printLobbyMessages(10);
   document.querySelector('#lobby-chat-window').style.setProperty('scroll-behavior', 'smooth');
   // await pause(50);
   animateTitle();
   await pause(200);
-  assignHandlers();
+  assignHandlers();  
   startPolling();
+  let selectedFont = playerState.preferences.customizations['--player-username-font'];
+  var fontSelect = document.getElementById('font-select');
+  for (var a = 0; a < fonts.length; a++) {
+    var opt = document.createElement('option');
+    opt.value = opt.innerHTML = fonts[a];
+    opt.style.fontFamily = fonts[a];
+    fontSelect.add(opt);
+    if (fonts[a] === selectedFont) {
+      opt.selected = true;
+    }
+  }
 };
 
 async function animateTitle() {
@@ -75,12 +92,26 @@ const game = {
   deals: 0,
   singlePlayer: false,
 };
+
 let playerState = {
-  userName: undefined,
+  userName: 'Player',
   visitorID: undefined,
   status: 'title',
+  previousStatus: 'title',
   lastMessageSeen: 0,
   initiator: false,
+  preferences: {
+    animationSpeed: 200,
+    CPUTurnSpeed: 500,
+    CPUDifficulty: 1,
+    customizations: {
+      '--player-area-bg-color': '#223b3b',
+      '--die-color': '#c9c9c9',
+      '--die-dot-color': '#000000',
+      '--die-border-radius': '0.12',
+      '--player-username-font': 'sans-serif'
+    }
+  },
 }
 let queryTimes = {
   lobbyMessages: Date.now(),
@@ -88,6 +119,11 @@ let queryTimes = {
   handshake: Date.now()
 }
 let currentDieID = 0;
+
+let knownUser = localStorage.getItem('kbones-prefs');
+console.log('known user', knownUser);
+console.log('playerState', playerState)
+assimilateKnownUser();
 
 function assignHandlers() {
   // for testing
@@ -126,12 +162,16 @@ function assignHandlers() {
     }
   });
   document.querySelector('#confirm-game-button').addEventListener('click', async () => {
-    playerState.status = `playing vs. ${game.opponent.userName}`;
-    let updateShake = {
-      status: playerState.status,
-      visitorID: playerState.visitorID,
-    };
-    handshake(updateShake);
+    await getOpponentCustomizations(game.opponent.visitorID);
+    console.warn('confirmer got opponent customizations')
+    await reportNewStatus('playing');
+    console.warn('confirmer reported "playing" status')
+    // playerState.status = `playing`;
+    // let updateShake = {
+    //   status: playerState.status,
+    //   visitorID: playerState.visitorID,
+    // };
+    // handshake(updateShake);
     dismissConfirmModal();
     document.querySelector('#player-name').textContent = playerState.userName;
     document.querySelector('#opponent-name').textContent = game.opponent.userName;
@@ -148,26 +188,29 @@ function assignHandlers() {
   document.querySelector('#toggle-ready-button').addEventListener('click', async (e) => {
     let lobbyPanel = document.querySelector('#lobby-control-panel');
     if (playerState.status !== 'ready') {
-      playerState.status = 'ready';
+      // playerState.status = 'ready';
       let readyUserList = await getReadyUsers();
       if (readyUserList.length) {        
         let newOpponent = readyUserList[0];
         game.opponent.userName = newOpponent.userName;
         game.opponent.visitorID = newOpponent.visitorID;
-        console.log('READY USER', newOpponent);
-        await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+        console.log('FOUND READY USER', newOpponent);
+        // await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+        await reportNewStatus('ready');
         playerState.initiator = true;
-        callConfirmModal(newOpponent);
+        callConfirmModal(newOpponent);      
       } else {
         lobbyPanel.classList.add('searching');
-        await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+        // await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+        await reportNewStatus('ready');
         await populateUserList();
         e.target.innerHTML = 'Stop Searching';
       }
     } else {
       lobbyPanel.classList.remove('searching');
-      playerState.status = 'lobby';
-      await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+      await reportNewStatus('lobby');
+      // playerState.status = 'lobby';
+      // await handshake({ visitorID: playerState.visitorID, status: playerState.status });
       await populateUserList();
       e.target.innerHTML = 'Find Game';
     }
@@ -192,53 +235,187 @@ function assignHandlers() {
         document.querySelector('#enter-lobby-button').click();
       }
     }
+    if (e.key === 'r') {
+      console.log('hit', e.key)
+      getOpponentCustomizations(1298)
+    }
+  });
+  document.querySelector('#full-screen-switch').addEventListener('click', async (e) => {
+    e.target.classList.add('disabled');
+    await toggleFullScreen();
+    if (fscreen.fullscreenElement !== null) {
+      e.target.classList.add('on');
+    } else {
+      e.target.classList.remove('on');    
+    }
+    e.target.classList.remove('disabled');
+  });
+  document.querySelector('#die-radius-slider').addEventListener('input', async (e) => {
+    let newValue = parseFloat(e.target.value);
+    document.documentElement.style.setProperty('--die-border-radius', `calc(var(--die-size) * ${newValue})`);
+  });
+  document.querySelector('#die-radius-slider').addEventListener('change', async (e) => {
+    let newValue = parseFloat(e.target.value);
+    playerState.preferences.customizations['--die-border-radius'] = newValue;
+    console.log('storing newValue?', newValue);
+    await sendPreferences(playerState.preferences);
+    storeUserState();
+  });
+  document.querySelector('#bg-color-input').addEventListener('input', async (e) => {
+    let newValue = e.target.value;
+    document.documentElement.style.setProperty('--player-area-bg-color', newValue);
+  });
+  document.querySelector('#bg-color-input').addEventListener('change', async (e) => {
+    let newValue = e.target.value;
+    document.documentElement.style.setProperty('--player-area-bg-color', newValue);
+    playerState.preferences.customizations['--player-area-bg-color'] = newValue;
+    console.log('storing newValue?', newValue)
+    await sendPreferences(playerState.preferences);
+    storeUserState();
+  });
+  document.querySelector('#die-color-input').addEventListener('input', async (e) => {
+    let newValue = e.target.value;
+    console.log('new is?', newValue)
+    document.documentElement.style.setProperty('--die-color', newValue);
+  });
+  document.querySelector('#die-color-input').addEventListener('change', async (e) => {
+    let newValue = e.target.value;
+    document.documentElement.style.setProperty('--die-color', newValue);
+    playerState.preferences.customizations['--die-color'] = newValue;
+    console.log('storing newValue?', newValue)
+    await sendPreferences(playerState.preferences);
+    storeUserState();
+  });
+  document.querySelector('#die-dot-color-input').addEventListener('input', async (e) => {
+    let newValue = e.target.value;
+    console.log('new is?', newValue)
+    document.documentElement.style.setProperty('--die-dot-color', newValue);
+  });
+  document.querySelector('#die-dot-color-input').addEventListener('change', async (e) => {
+    let newValue = e.target.value;
+    document.documentElement.style.setProperty('--die-dot-color', newValue);
+    playerState.preferences.customizations['--die-dot-color'] = newValue;
+    console.log('storing newValue?', newValue)
+    await sendPreferences(playerState.preferences);
+    storeUserState();
+  });
+  document.querySelector('#font-select').addEventListener('change', async (e) => {
+    let newValue = e.target.value;
+    document.documentElement.style.setProperty('--player-username-font', newValue);
+    playerState.preferences.customizations['--player-username-font'] = newValue;
+    console.log('storing newValue?', newValue)
+    await sendPreferences(playerState.preferences);
+    storeUserState();
+  });
+  document.addEventListener('visibilitychange', (e) => {
+    let newStatus;
+    if (document.visibilityState === 'visible') {
+      newStatus = playerState.previousStatus;
+    } else {
+      newStatus = 'away';     
+    }
+    reportNewStatus(newStatus);
   });
 }
 
-async function populateUserList() {
+async function reportNewStatus(newStatus) {
+  playerState.previousStatus = playerState.status;
+  playerState.status = newStatus;
+  await handshake([playerState.visitorID, playerState.status]);
+}
+
+async function populateUserList(initial) {
   let nowInSeconds = Math.round(Date.now() / 1000);
-  let userList = await getUsersFromDatabase();  
-  document.querySelector('#user-list').innerHTML = '';
+  let userList = await getUsersFromDatabase(initial);
+  let currentUserElement = document.querySelector('#user-list');
+  // document.querySelector('#user-list').innerHTML = '';
   userList.forEach((user) => {
-    let lastSeen = nowInSeconds - parseInt(user.lastPing);
-    let lastSeenMessage;
-    if (lastSeen > 59) {
-      // let minutes = secondsToMinutes(lastSeen);
-      // let minuteCount = minutes.minutes;
-      // let minuteDecimal = (minutes.seconds / 60).toFixed(1).toString().slice(2);
-      // lastSeenMessage = `${minuteCount}.${minuteDecimal} minutes ago`;
-      // console.log('using minutes', minutes);
-      // console.log('using decimal', minuteDecimal);
-    } else {
-      lastSeenMessage = `${lastSeen} seconds ago`;
-      if (lastSeen <= 3) {
-        lastSeenMessage = 'now';
+    let sinceLastPing = nowInSeconds - parseInt(user.lastPing);
+    let lastPingMessage; // updated for every user
+    let rowID = `user-row-${user.visitorID}`;
+    let listed = document.querySelector(`#${rowID}`);
+    if (listed) { // only replace ping and status
+      console.log(rowID, 'already in list');
+      console.log('user', user, ' sinceLastPing is', sinceLastPing);
+      if (sinceLastPing > 5) {
+        // let minutes = secondsToMinutes(sinceLastPing);
+        // let minuteCount = minutes.minutes;
+        // let minuteDecimal = (minutes.seconds / 60).toFixed(1).toString().slice(2);
+        // lastPingMessage = `${minuteCount}.${minuteDecimal} minutes ago`;
+        // console.log('using minutes', minutes);
+        // console.log('using decimal', minuteDecimal);
+        listed.classList.add('disconnected');
+      } else {
+        if (sinceLastPing <= 2) {
+          lastPingMessage = 'now';
+        } else {
+          lastPingMessage = `${sinceLastPing} seconds ago`;          
+        }
       }
-    }
-    let userRowClass = 'user-list-row'
-    let nameListing = user.userName;
-    if (parseInt(user.visitorID) === playerState.visitorID) {
-      userRowClass += ' self'
-      nameListing += ' (you)';
-    }
-   
-    document.querySelector('#user-list').innerHTML += `
-      <div class='${userRowClass}'>
-        <div>${nameListing}</div>
+      document.querySelector(`#${rowID} .user-last-seen`).textContent = lastPingMessage;
+      document.querySelector(`#${rowID} .user-status`).textContent = user.status;
+      let lastInClasslist = document.querySelector(`#${rowID} .user-status`).classList.item(document.querySelector(`#${rowID} .user-status`).classList.length - 1);
+      document.querySelector(`#${rowID} .user-status`).classList.replace(lastInClasslist, user.status);
+    } else if (sinceLastPing < 5) { // not in list but recently handshook
+      let userRowClasses = ['user-list-row'];
+      let nameListing = user.userName;
+      let lastPingMessage = initial? 'now' : 'just joined';
+      if (user.visitorID == playerState.visitorID) {
+        userRowClasses.push('self');
+        // nameListing += '<p style="font-family: sans-serif"> (you)</p>';
+      }
+      console.error('CREATING ENTIRE DIV FOR NEW VISITOR');
+      let newUserRow = document.createElement('div');
+      newUserRow.classList.add(...userRowClasses);
+      newUserRow.setAttribute('id', rowID);
+      console.log('user is????', user);
+      let userFont = user.preferences.customizations['--player-username-font'];
+      newUserRow.innerHTML = `
+        <div style="font-family: ${userFont}">${nameListing}</div>
         <div>#${user.visitorID}</div>
-        <div${user.status === 'ready' ? ' style="color:green; text-transform:uppercase"' : ''}>${user.status}</div>
-        <div>${lastSeenMessage}</div>
-      </div>
-    `;
+        <div class="user-status">${user.status}</div>
+        <div class="user-last-seen">${lastPingMessage}</div>
+      `;
+      currentUserElement.appendChild(newUserRow);
+      document.querySelector(`#${rowID} .user-status`).classList.add('lobby');
+
+
+      newUserRow.classList.add('newly-joined');
+      setTimeout(() => {
+        newUserRow.classList.remove('newly-joined');
+      }, 400);      
+    } else {
+      console.log(user.userName, 'showed up in the list, but too high sinceLastPing to print')
+    }
+  });  
+  let disconnectedArray = [...document.querySelectorAll(`.disconnected`)];
+  for (const doomedUser in disconnectedArray) {
+    currentUserElement.removeChild(disconnectedArray[doomedUser]);
+  };  
+}
+
+function sortByLastSeen(userList) {
+  console.log('sorting userList', userList);
+  let sortedList = userList.sort((a, b) => {
+    a.lastPing < b.lastPing;
   });
+  console.log('SORTED', sortedList)
+  return sortedList;
 }
 
 const userPreferences = {
   animationSpeed: 200,
   CPUTurnSpeed: 500,
+  CPUDifficulty: 0,
+  colors: {
+    '--player-area-bg-color': '#223b3b',
+    '--die-color': '#c9c9c9',
+    '--die-dot-color': '#000000',
+  }
 }
 
-const pollInterval = 500;
+// const pollInterval = 1500;
+const pollInterval = 1200;
 
 async function performInitialHandshake(enteredName) {  
   console.warn('---------> INITIAL handshake!');
@@ -250,8 +427,9 @@ async function performInitialHandshake(enteredName) {
   document.querySelector('#player-name').innerHTML = enteredName + ' #' + visitorID;
   playerState.visitorID = visitorID;
   playerState.userName = enteredName;
-  console.warn('established new user #' + visitorID);
   storeUserState();
+  await sendPreferences(playerState.preferences);
+  console.warn('established new user #' + visitorID);
   // setTimeout(async () => {
     // console.warn('shaking...');
     // let updateShake = {
@@ -266,7 +444,7 @@ async function performInitialHandshake(enteredName) {
 }
 
 let pollLoop;
-
+let confirmWaitTime = 0;
 function startPolling() {
   // let lastPoll = 0;  
   pollLoop = setInterval(async () => {
@@ -286,9 +464,10 @@ function startPolling() {
       let waitingForConfirm = document.querySelector('#confirm-game-modal').classList.contains('showing');
       if (waitingForConfirm) {
         // console.green('ALREADY FOUND READY OPPONENT');
+        confirmWaitTime += pollInterval;
         if (!playerState.initiator) {
           if (playerState.status !== 'confirming') {
-            console.green('I am RESPONDANT polling findGameWithIDs!');
+            console.green('I am RESPONDANT polling findGameWithIDs for the one INITIATOR just created with our IDs!');
             let newGame = await findGameWithIDs([game.opponent.visitorID, playerState.visitorID]);
             if (newGame) {
               console.log('RESPONDANT found a game', newGame);
@@ -298,9 +477,9 @@ function startPolling() {
               game.firstPlayer = newGame.playerTurn;
               game.atBat = parseInt(newGame.atBat);
               game.currentTurn = newGame.playerTurn;
-
-              playerState.status = 'confirming';
-              await handshake([playerState.visitorID, playerState.status]);
+              await reportNewStatus('confirming');
+              // playerState.status = 'confirming';
+              // await handshake([playerState.visitorID, playerState.status]);
               document.querySelector('#opponent-check').classList.add('checked');
               await pause(500);
               document.querySelector('#player-check').classList.add('checked');
@@ -311,10 +490,9 @@ function startPolling() {
             }
           } else {
             console.green('button enabled now.');
-          }
-            
+          }            
         } else { // initiator
-          console.log('i am initiator --------->');
+          console.log('i am INITIATOR, checking if opponent status is confirming --------->');
           let opponentStatus = await checkUserStatus(game.opponent.visitorID);
           if (opponentStatus === 'confirming') {
             document.querySelector('#opponent-check').classList.add('checked');
@@ -322,9 +500,10 @@ function startPolling() {
             document.querySelector('#player-check').classList.add('checked');
             document.querySelector('#confirm-message').textContent = 'CONNECTED!';
             document.querySelector('#confirm-game-button').disabled = false;
-            playerState.status = 'confirming';
+            // playerState.status = 'confirming';
+            await reportNewStatus('confirming');
           } else {
-            console.log('checked, but opponent is still', opponentStatus);
+            console.log('checked, but opponent status is still', opponentStatus, ', not confirming');
           }
 
         }
@@ -346,12 +525,14 @@ function startPolling() {
             }
           } else {
             populateUserList();
+            await pause(200);
           }          
         } else {
           console.error('throttled populateUserList', (now - queryTimes.users));
         }        
         if (now - queryTimes.lobbyMessages >= (pollInterval / 1.5)) {
           printLobbyMessages();
+          await pause(200);
         } else {
           console.error('throttled printLobbyMessages', (now - queryTimes.lobbyMessages));
         }         
@@ -381,11 +562,9 @@ function startPolling() {
           }          
         } else {
           // 2nd turn onward
-          console.log('2ND TURN PLUS POLLING ------------------------------>');
           console.log('new data', currentGameData)
           console.log('game.player.atBat', game.player.atBat);
           console.log('currentGameData.currentTurn', currentGameData.playerTurn);
-          console.log('vis id', playerState.visitorID);
           let convertedLane = parseInt(currentGameData.lastMove);
           console.log('orig lane', convertedLane);
           if (convertedLane == 0) {
@@ -410,7 +589,7 @@ function startPolling() {
   }, pollInterval);
 }
 
-document.documentElement.style.setProperty('--die-animation-speed', userPreferences.animationSpeed + 'ms');
+// document.documentElement.style.setProperty('--die-animation-speed', userPreferences.animationSpeed + 'ms');
 
 function contestantWithID(visitorID) {
   let contestant;
@@ -442,7 +621,7 @@ async function callCoinModal(firstTurnID) { // called once at the beginning of e
   modal.classList.add('showing');
   await pause(userPreferences.animationSpeed);
   let coin = document.querySelector('#coin');
-  let flipCount = randomInt(8,12);
+  let flipCount = 5;
   while (flipCount) {
     coin.classList.add('turned');
     await pause(100);
@@ -499,7 +678,7 @@ async function callConfirmModal(opponent) {
     console.log('game?', newGame);
     let firstTurnID = parseInt(newGame[1]);
     game.gameID = newGame[0];
-    if (playerState.visitorID === firstTurnID) {
+    if (playerState.visitorID == firstTurnID) {
       game.firstPlayer = firstTurnID;
       game.secondPlayer = opponent.visitorID;
     } else {
@@ -527,11 +706,35 @@ async function dismissConfirmModal() {
 }
   
 
-export async function init() {
+export async function introduceToLobby() {
+  game.player.userName = playerState.userName;
+  game.singlePlayer = false;
+  if (knownUser) {
+    if (playerState.visitorID) { // in DB already
+      console.warn('in DB already: normal handshake')
+      await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+    } else { // has changed prefs but not entered a name
+      console.warn('beginHandshake known but no ID: performInitialHandshake');
+      await performInitialHandshake(playerState.userName);
+    }
+  } else { // nothing was in local storage
+    console.warn('beginHandshake !knownUser: performInitialHandshake');
+    await performInitialHandshake(playerState.userName);
+  }
+   // so that self is in list sooner
+}
+export async function beginHandshake() {
   game.player.userName = playerState.userName;
   if (knownUser) {
-    await handshake({ visitorID: playerState.visitorID, status: playerState.status });
-  } else {
+    if (playerState.visitorID) { // in DB already
+      console.warn('in DB already: normal handshake')
+      await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+    } else { // has changed prefs but not entered a name
+      console.warn('beginHandshake known but no ID: performInitialHandshake');
+      await performInitialHandshake(playerState.userName);
+    }
+  } else { // nothing was in local storage
+    console.warn('beginHandshake !knownUser: performInitialHandshake');
     await performInitialHandshake(playerState.userName);
   }
    // so that self is in list sooner
@@ -673,7 +876,7 @@ function pause(duration) {
   });
 }
 
-async function sendMove(lane) {
+async function sendMove(lane, winningMove) {
   let moveData = {
     gameID: game.gameID,
     visitorID: playerState.visitorID,
@@ -681,17 +884,19 @@ async function sendMove(lane) {
     chosenLane: lane,
   }
   let nextDie = await postNewMove(moveData);
-  dealDie('opponent', parseInt(nextDie));
+  if (!winningMove) {
+    dealDie('opponent', parseInt(nextDie));
+  }
 }
 
 async function destroyDie(query, crosscheck) {
   console.green('destroyDie called');
   const dieElement = document.querySelector(query);
   if (!dieElement) {
-    console.error('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> destroyDie was passed', query, 'to produce undefined document.querySelector(query)');
+    console.error('destroyDie was passed', query, 'to produce undefined document.querySelector(query)');
   }
   if (crosscheck) {
-    console.green(`DDDDDDDDDDDDDDESTROYING query ${query} via checkForCrossMatches <<<<<<<<<<<<<<<<<<<<<<`)
+    console.green(`DESTROYING query ${query} via checkForCrossMatches`);
   }
   dieElement.classList.remove('showing');
   await pause(userPreferences.animationSpeed);
@@ -746,11 +951,16 @@ async function addDieToLane(contestant, denomination, lane, demo) {
     if (totalDiceInPlay(contestant) === 9) {
       let winner, loser;
       if (game.player.totalScore > game.opponent.totalScore) {
+        console.error('------------------- WINNER:', game.player.userName, '-', game.player.totalScore, ' vs LOSER:', game.opponent.userName, '-', game.opponent.totalScore);
         winner = 'player';
         loser = 'opponent';
-      } else {
+        sendMove(lane, true);
+      } else if (game.player.totalScore < game.opponent.totalScore) {
+        console.error('------------------- WINNER:', game.opponent.userName, '-', game.opponent.totalScore, ' vs LOSER:', game.player.userName, '-', game.player.totalScore);
         winner = 'opponent';
         loser = 'player';
+      } else {
+        alert(`IT'S A GODDAMNED TIE`);
       }
       await pause(100);
       document.querySelector(`#${winner}-area.turn-area`).classList.add('won');
@@ -758,13 +968,13 @@ async function addDieToLane(contestant, denomination, lane, demo) {
     } else {
       if (contestant === 'player') {
         if (!game.singlePlayer) {
-          sendMove(lane)
+          sendMove(lane);
         } else {
           dealToCPU();
         }
       }
     }
-  } else {    
+  } else { 
   }
   return newDie;
 }
@@ -872,61 +1082,6 @@ async function checkForCrossMatches(aggressor, attackingDie) {
   console.error('checkForCrossMatches END -------------------------------------');
 }
 
-async function checkForCrossMatches2(aggressor, attackingDie) {
-  console.green('checkForCrossMatches called');
-  let doomedDice = [];
-  let doomLaneIndex;
-  const nemesis = aggressor === 'player' ? 'opponent' : 'player';
-
-  game[aggressor].laneElements.forEach((laneArray, i) => {
-    const oppositeLane = game[nemesis].laneElements[i];
-    console.log('checkForCrossMatches checking oppositeLane', i, 'contents', oppositeLane);
-    laneArray.forEach((die) => {
-      let dieValue = die.denomination;
-      oppositeLane.forEach((oppositeDie) => {
-        let oppositeDieValue = oppositeDie.denomination;
-        if (oppositeDieValue === dieValue) {
-          console.error('MATCH', oppositeDieValue, 'and', dieValue, 'in lane (doomLaneIndex)', i);
-          doomedDice = [...document.querySelectorAll(`#${nemesis}-area .lane-${i} .value-${dieValue}`)];
-          console.error('doomedDice is now', doomedDice)
-          doomLaneIndex = i;
-          // game[nemesis].lanes[i] = game[nemesis].lanes[i].filter((val) => val !== dieValue);
-        }
-      });
-    });
-  });  
-  let attacker = document.querySelector(`#${attackingDie.elementID}`);
-  if (doomedDice.length) {
-    console.error('checkForCrossMatches plans to go through doomedDice', doomedDice);
-    console.error('for the matches it found for', attacker);
-  } else {
-    console.log('doomedDice came out empty when checking attacker', attacker);
-  }
-  for (let die in doomedDice) {
-    die = doomedDice[die]
-    console.log('checking doomedDice die', die)
-    let doomLane = game[nemesis].laneElements[doomLaneIndex];
-    console.error('doomlane is ind', doomLaneIndex, doomLane);
-    console.error('of game[nemesis].laneElements', game[nemesis].laneElements);
-    doomLane.splice(doomLane.indexOf(die), 1);
-    die.classList.add('angry');
-    attacker.classList.add('angry');
-    // die.classList.remove('showing');
-    // await pause(userPreferences.animationSpeed);
-    // die.parentNode.removeChild(die);
-    console.error(`checkForCrossMatches calling destroyDie on`, die);
-    console.error(`attacker is`, attacker);
-    await pause(userPreferences.animationSpeed);
-    await destroyDie('#' + die.id, true);
-    await pause(userPreferences.animationSpeed);
-    attacker.classList.remove('angry');
-  }
-  if (doomedDice.length) {
-    updateContestantScore(nemesis);
-  }
-  // document.querySelector('#debug').innerHTML = `o - ${totalDiceInPlay('opponent')} <br /> p - ${totalDiceInPlay('player')}`;
-}
-
 function colorMatchingDice(contestant) {
   console.green('colorMatchingDice called');
   console.log('colorMatchingDice is analyzing');
@@ -993,14 +1148,22 @@ async function toggleFullScreen() {
   if (fscreen.fullscreenElement !== null) {
     await fscreen.exitFullscreen(document.body);
     document.documentElement.style.setProperty('--actual-height', `${initialHeight}px`);
-    document.getElementById('full-screen-off-icon').classList.add('hidden');
-    document.getElementById('full-screen-icon').classList.remove('hidden');
+    // document.getElementById('full-screen-off-icon').classList.add('hidden');
+    // document.getElementById('full-screen-icon').classList.remove('hidden');
     
   } else {
     await fscreen.requestFullscreen(document.body);
-    document.getElementById('full-screen-off-icon').classList.remove('hidden');
-    document.getElementById('full-screen-icon').classList.add('hidden');
+    // document.getElementById('full-screen-off-icon').classList.remove('hidden');
+    // document.getElementById('full-screen-icon').classList.add('hidden');
   }
+}
+
+function applyPlayerCustomizations() {
+  document.querySelector('#cpu-difficulty-slider').value = playerState.preferences.CPUDifficulty;
+  document.querySelector('#die-radius-slider').value = playerState.preferences.customizations['--die-border-radius'];
+  document.querySelector('#bg-color-input').value = playerState.preferences.customizations['--player-area-bg-color'];
+  document.querySelector('#die-color-input').value = playerState.preferences.customizations['--die-color'];
+  document.querySelector('#die-dot-color-input').value = playerState.preferences.customizations['--die-dot-color'];    
 }
 
 function storeUserState() {
@@ -1012,7 +1175,28 @@ function loadUserState(rawData) {
   let newState = JSON.parse(rawData);
   playerState = { ...newState };
   playerState.status = 'title';
+
+  applyPlayerCustomizations();
+
+  let newRadius = parseFloat(playerState.preferences.customizations['--die-border-radius']);
+  document.documentElement.style.setProperty('--die-border-radius', `calc(var(--die-size) * ${newRadius})`);
+  document.documentElement.style.setProperty('--player-area-bg-color', playerState.preferences.customizations['--player-area-bg-color']);
+  document.documentElement.style.setProperty('--die-color', playerState.preferences.customizations['--die-color']);
+  document.documentElement.style.setProperty('--die-dot-color', playerState.preferences.customizations['--die-dot-color']);
+  document.documentElement.style.setProperty('--player-username-font', playerState.preferences.customizations['--player-username-font']);
+  // document.documentElement.style.setProperty('--die-animation-speed', playerState.preferences.animationSpeed + 'ms');
   console.warn('loaded user', playerState);
+}
+
+function applyOpponentCustomizations() {
+  console.log('applying opponent prefs', game.opponent.preferences.customizations);
+  let newRadius = parseFloat(game.opponent.preferences.customizations['--die-border-radius']);
+  document.documentElement.style.setProperty('--opponent-die-border-radius', `calc(var(--die-size) * ${newRadius})`);
+  document.documentElement.style.setProperty('--opponent-area-bg-color', game.opponent.preferences.customizations['--player-area-bg-color']);
+  document.documentElement.style.setProperty('--opponent-die-color', game.opponent.preferences.customizations['--die-color']);
+  document.documentElement.style.setProperty('--opponent-die-dot-color', game.opponent.preferences.customizations['--die-dot-color']);
+  document.documentElement.style.setProperty('--opponent-username-font', game.opponent.preferences.customizations['--player-username-font']);
+
 }
 
 function secondsToMinutes(seconds) {
@@ -1065,7 +1249,24 @@ async function printLobbyMessages(forceHistory) {
   }
 }
 
+async function getOpponentCustomizations(opponentID) {
+  let response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/getopponentcustomizations.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: {
+      visitorID: opponentID,
+    },
+  });
+  const preferences = JSON.parse(response.data.preferences);
+  game.opponent.preferences = preferences;
+  applyOpponentCustomizations();
+}
+
 async function postNewMove(moveData) {
+  console.error(game.player.userName, 'posting move', moveData);
   const response = await axios({
     method: 'post',
     url: 'https://mikedonovan.dev/kbones/php/sendmove.php',
@@ -1153,8 +1354,8 @@ async function getRandomFlipFromDatabase() {
   });
   console.log('GOT RAND', response.data)
 }
-async function getUsersFromDatabase() {
-  // console.warn('CALLING getUsersFromDatabase');
+async function getUsersFromDatabase(initial) {
+  console.warn('CALLING getUsersFromDatabase');
   let calledAt = Date.now();
   queryTimes.users = calledAt;
   let response = await axios({
@@ -1166,13 +1367,18 @@ async function getUsersFromDatabase() {
   });
   const usersArray = [...response.data];
   usersArray.forEach((row, i, self) => {
-    self[i] = JSON.parse(row)
+    self[i] = JSON.parse(row);
+    self[i].preferences = JSON.parse(self[i].preferences);
+    console.log('parsed pref', self[i]);
   });
+  if (initial) {
+    // document.querySelector('#enter-lobby-button').disabled = false;
+  }
   console.warn('got', usersArray.length, 'users in', Date.now() - calledAt);
   return usersArray;
 }
 async function getReadyUsers() {
-  // console.warn('CALLING getUsersFromDatabase');
+  console.warn('CALLING getReadyUsers');
   let calledAt = Date.now();
   queryTimes.users = calledAt;
   let response = await axios({
@@ -1207,14 +1413,16 @@ async function getLobbyMessages(forceHistory=0) {
     self[i] = JSON.parse(row);
   });
   console.warn('got', messagesArray.length, 'messasges in', Date.now() - calledAt);
+  console.log(messagesArray)
   return messagesArray.reverse();
 }
 async function sendLobbyMessage(message) {
   let messageData = {
-    userName: game.player.userName,
+    userName: playerState.userName,
     visitorID: playerState.visitorID,
     message: message
   }
+  console.log('sending lobby message', messageData)
   messageData = JSON.stringify(messageData);
   let response = await axios({
      method: 'post',
@@ -1229,6 +1437,39 @@ async function sendLobbyMessage(message) {
   return response;
 }
 
+async function sendPreferences(preferences) {
+  if (!playerState.visitorID) {
+    console.log('no');
+    return;
+  }
+  const response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/sendpreferences.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: JSON.stringify({
+      visitorID: playerState.visitorID,
+      preferences: JSON.stringify(preferences),
+    }),
+  });
+  return response;
+}
+async function changeUserName(newName) {
+  const response = await axios({
+    method: 'post',
+    url: 'https://mikedonovan.dev/kbones/php/changeusername.php',
+    headers: {
+      'Content-type': 'application/x-www-form-urlencoded',
+    },
+    data: JSON.stringify({
+      visitorID: playerState.visitorID,
+      newName: newName
+    }),
+  });
+  console.log('changed name?', response.data);
+  document.querySelector('#user-list').innerHTML = '';
+}
 async function handshake(shakeData) {
   let startedShake = Date.now();
   queryTimes.handshake = Date.now();
@@ -1247,10 +1488,39 @@ async function handshake(shakeData) {
   return shakeResult.data
 }
 
-document.querySelector('#enter-lobby-button').addEventListener('click', async () => {
-  playerState.userName = convertToPlain(document.querySelector('#name-entry-field').value);
-  playerState.status = 'lobby';
-  init();
+document.querySelector('#enter-lobby-button').addEventListener('click', async () => {  
+  let nameEntered = document.querySelector('#name-entry-field').value;
+  nameEntered = convertToPlain(document.querySelector('#name-entry-field').value);
+  if (nameEntered.trim().length < 2 || nameEntered.trim().length > 18) {
+    return;
+  }
+  if (knownUser) {
+    if (playerState.visitorID) {
+      console.log('button comparing old', playerState.userName, 'to entered', nameEntered)
+      if (playerState.userName !== nameEntered) {
+        console.error('known visitor changing name', playerState.userName, 'to', nameEntered);
+        playerState.userName = nameEntered;
+        storeUserState();
+        await changeUserName(nameEntered);
+        document.querySelector('#user-list').innerHTML = '';
+        await populateUserList();
+      } else {
+        console.warn('known visitor using same name');
+        populateUserList();    
+      }
+    } else {
+      playerState.userName = nameEntered;
+      console.warn('known but no ID: performInitialHandshake');
+      await performInitialHandshake(playerState.userName);
+    }
+  } else {
+    playerState.userName = nameEntered;
+    console.warn('completely unknown: performInitialHandshake');
+    await performInitialHandshake(playerState.userName);
+  }
+  
+  reportNewStatus('lobby');
+  
   document.querySelector('#lobby-screen').classList.remove('hidden');
   await pause(100);
   document.querySelector('#title-screen').classList.add('hidden');
@@ -1263,24 +1533,34 @@ document.querySelector('#name-entry-field').addEventListener('input', (e) => {
   } else {
     document.querySelector('#enter-lobby-button').disabled = true;
   }
-  e.target.value = e.target.value.trim();
+  // e.target.value = e.target.value.trim();
 });
 
-let knownUser = localStorage.getItem('kbones-prefs');
-assimilateKnownUser();
+// let knownUser = localStorage.getItem('kbones-prefs');
+// assimilateKnownUser();
 
 async function assimilateKnownUser() {
   if (knownUser) {
-    console.green('KNOWN USER');
-    await handshake({ visitorID: playerState.visitorID, status: 'title' });
-    populateUserList();
     loadUserState(knownUser);
-    document.querySelector('#name-entry-field').value = playerState.userName;
-    document.querySelector('#name-entry-field').disabled = true;
-    document.querySelector('#enter-lobby-button').disabled = false;
-    document.querySelector('#known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
+    console.log('assimilate found playerstate', playerState)
+    if (playerState.visitorID) {
+      console.green('KNOWN VISITOR (has entered a username)');
+      document.querySelector('#name-entry-field').value = playerState.userName;
+      document.querySelector('#enter-lobby-button').disabled = false;
+      document.querySelector('#demo-username').textContent = playerState.userName;
+      reportNewStatus('title');
+      // await handshake({ visitorID: playerState.visitorID, status: 'title' });
+      document.querySelector('#known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
+      // console.log('updating list again to print own data before clicking to lobby');
+      // populateUserList();
+    } else {
+      console.green('KNOWN USER (has adjusted preferences only)');
+      document.querySelector('#enter-lobby-button').disabled = true;
+      document.querySelector('#name-entry-field').placeholder = 'Enter a name';
+    }
   } else {
-    console.green('UNKNOWN USER');
+    console.green('UNKNOWN USER (never adjusted or entered a username)');
+    document.querySelector('#enter-lobby-button').disabled = true;
     document.querySelector('#name-entry-field').placeholder = 'Enter a name';
   }
 }
@@ -1380,24 +1660,29 @@ async function playTutorial() {
   let playerLanes = [...document.querySelectorAll(`#player-area .die-lane`)];
 
   for (const lane in playerLanes) {
-    playerLanes[lane].classList.add('available');
-    await pause(150);
+    playerLanes[lane].classList.add('tutorial-flash');
+    await pause(400);
   }
 
-  await pause(500);
+  await pause(600);
 
   document.querySelector(`#player-area .new-die-box`).classList.remove('highlighted');
-  await addDieToLane('player', 5, 1, true);
-  for (const lane in playerLanes) {
-    playerLanes[lane].classList.remove('available');
-  }
 
   if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
 
-  await pause(500);
+  await addDieToLane('player', 5, 1, true);
+  for (const lane in playerLanes) {
+    playerLanes[lane].classList.remove('tutorial-flash');
+    await pause(400);
+  }
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
 
   document.querySelector('#tutorial-top-text-area').innerHTML = '';
   typeSentence(
@@ -1451,12 +1736,23 @@ async function playTutorial() {
     tutorialTypeSpeed
   );
 
+  document.querySelector('#player-area .die-lane:nth-child(1)').classList.add('tutorial-highlight');
+  
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+  
+  await pause(1200);
+  
   if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
 
-  await pause(500);
+  await pause(1200);
+
+  document.querySelector('#player-area .die-lane:nth-child(1)').classList.remove('tutorial-highlight');
 
   let secondFour = await addDieToLane('player', 4, 0, true);
 
@@ -1506,7 +1802,7 @@ async function playTutorial() {
 
   await pause(500);
 
-  new Die(4, `#player-area .new-die-box`);
+  new Die(4, `#player-area .new-die-box`, true);
 
   document.querySelector('#tutorial-top-text-area').innerHTML = '';
   await typeSentence(
@@ -1559,7 +1855,9 @@ async function playTutorial() {
     return;
   }
 
-  await pause(1000);
+  await pause(1000);  
+
+  let attackingDie = await playDemoTurn('player', 3, 2);
 
   document.querySelector('#tutorial-top-text-area').innerHTML = '';
   await typeSentence(
@@ -1576,15 +1874,34 @@ async function playTutorial() {
     ],
     tutorialTypeSpeed
   );
-  
-  let attackingDie = await playDemoTurn('player', 3, 2);
+
+  document.querySelector('#opponent-area .die-lane:nth-child(3)').classList.add('tutorial-highlight');
+  document.querySelector('#player-area .die-lane:nth-child(3)').classList.add('tutorial-highlight');
+
+  await pause(1200);
 
   if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
   
-  await pause(200);
+  await pause(1200);
+
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }
+  
+  document.querySelector('#opponent-area .die-lane:nth-child(3)').classList.remove('tutorial-highlight');
+  document.querySelector('#player-area .die-lane:nth-child(3)').classList.remove('tutorial-highlight');
+
+    
+  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    console.log('--------------canceled demo!!');
+    return;
+  }  
+
+  await pause(500);
 
   document.querySelector('#tutorial-top-text-area').innerHTML = '';
   await typeSentence(
@@ -1592,7 +1909,11 @@ async function playTutorial() {
     'typed-sentence',
     [
       {
-        string: 'ALL of your opponent\'s matching dice',
+        string: 'All',
+        sectionClass: 'bold',
+      },
+      {
+        string: 'of their matching dice in that lane',
       },
       {
         string: 'are destroyed.',
@@ -1608,8 +1929,6 @@ async function playTutorial() {
   }
 
   await pause(500);
-  console.log('att', attackingDie)
-  console.log('doom', doomedDie)
   document.querySelector(`#${attackingDie.elementID}`).classList.add('angry');
   document.querySelector(`#${doomedDie.elementID}`).classList.add('angry');
   await pause(userPreferences.animationSpeed);
@@ -1622,6 +1941,7 @@ async function playTutorial() {
   document.querySelector(`#${attackingDie.elementID}`).classList.remove('angry');
   destroyDie(`#${doomedDie.elementID}`);
   await pause(userPreferences.animationSpeed);
+  document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
 
   await pause(500);
 
@@ -1657,16 +1977,22 @@ async function playTutorial() {
   await pause(1000);
 
   await playDemoTurn('opponent', 3, 1);
+   document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
   await pause(200);
   await playDemoTurn('player', 4, 1);
+   document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
   await pause(200);
   await playDemoTurn('opponent', 3, 0);
+   document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
   await pause(200);
   await playDemoTurn('player', 1, 2);
+   document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
   await pause(200);
   await playDemoTurn('opponent', 2, 1);
+   document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
   await pause(200);
   await playDemoTurn('player', 2, 2);
+   document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
 
   if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
@@ -1681,11 +2007,11 @@ async function playTutorial() {
   // show 'play again' button?
 }
 
-async function playDemoTurn(contestant, denomination, lane) {
+async function playDemoTurn(contestant, denomination, lane, dealPlayGap=500) {
   if (document.querySelector('#tutorial-screen').classList.contains('showing')) {
     new Die(denomination, `#${contestant}-area .new-die-box`, true);
     document.querySelector(`#${contestant}-area .new-die-box`).classList.add('highlighted');
-    await pause(500);
+    await pause(dealPlayGap);
     document.querySelector(`#${contestant}-area .new-die-box`).classList.remove('highlighted');
     let newDie = await addDieToLane(contestant, denomination, lane, true);
     return newDie;
@@ -1696,12 +2022,12 @@ async function playDemoTurn(contestant, denomination, lane) {
 }
 
 document.querySelector('#vs-cpu-button').addEventListener('click', async () => {
+  game.singlePlayer = true;
   resetGame();
   document.querySelector('#title-screen').classList.add('hidden');
   document.querySelector('#lobby-screen').style.display = 'none';
   document.querySelector('#opponent-area').classList.remove('dim');
-  document.querySelector('#header-message').textContent = 'CPU Battle';
-  game.singlePlayer = true;
+  document.querySelector('#header-message').textContent = `CPU Battle (difficulty ${playerState.preferences.CPUDifficulty})`;
   game.opponent.userName = 'CPU';
   document.querySelector('#player-name').textContent = playerState.userName;
   document.querySelector('#opponent-name').textContent = game.opponent.userName;
@@ -1737,8 +2063,8 @@ document.querySelector('#back-to-title-button').addEventListener('click', async 
   } else if (playerState.status === 'confirming') {
     return;
   }
-  playerState.status = 'title';
-  await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+  // playerState.status = 'title';
+  // await handshake({ visitorID: playerState.visitorID, status: playerState.status });
   document.querySelector('#title-screen').style.display = 'grid';
   await pause(50);
   document.querySelector('#title-screen').classList.remove('hidden');
@@ -1751,6 +2077,14 @@ document.querySelector('#options-button').addEventListener('click', async () => 
 document.querySelector('#options-exit-button').addEventListener('click', async () => {
   document.querySelector('#options-screen').classList.remove('showing');
 });
+document.querySelector('#cpu-difficulty-slider').addEventListener('change', (e) => {
+  let newDifficulty = parseInt(e.target.value);
+  console.log('set new diff', newDifficulty)
+  // if (newDifficulty === 10) {
+  //   document.documentElement.style.setProperty('--opponent-die-color', 'black');
+  //   document.documentElement.style.setProperty('--opponent-die-dot-color', 'black');
+  // }
+  playerState.preferences.CPUDifficulty = newDifficulty;
 
-
-// init();
+  storeUserState();
+});
