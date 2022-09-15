@@ -1,41 +1,59 @@
 import './css/style.css';
 import fscreen from 'fscreen';
-const axios = require('axios');
-require('console-green');
-// console.log('node env', process.env.NODE_ENV);
-// if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
-//   window.addEventListener('load', () => {
-//     navigator.serviceWorker
-//       .register('service-worker.js')
-//       .then((registration) => {
-//         console.log('SW registered: ', registration);
-//       })
-//       .catch((registrationError) => {
-//         console.log('SW registration failed: ', registrationError);
-//       });
-//   });
-// }
+import axios from 'axios';
 
-if (process.env.NODE_ENV === 'development') {
-  // document.getElementById('debug').style.display = 'block';
-  window.onresize = () => {
-    detectScreen();
-  };
+require('console-green');
+
+if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('service-worker.js')
+      .then((registration) => {
+        console.log('SW registered: ', registration);
+      })
+      .catch((registrationError) => {
+        console.log('SW registration failed: ', registrationError);
+      });
+  });
 }
+const localStorageName = process.env.NODE_ENV === 'development' ? 'kbones-dev' : 'kbones-prefs';
+if (process.env.NODE_ENV === 'development') {
+  document.title = 'DEV | ' + document.title;
+}
+const totalQueries = {
+  handshake: 0,
+  getUsers: 0,
+  lobbyMessages: 0
+};
+
+window.onresize = async () => {
+  if (document.activeElement.tagName !== 'INPUT') {
+    await pause(1000); // give keyboard time to go away if present
+    detectScreen();
+    if (fscreen.fullscreenElement) {
+      document.getElementById('full-screen-switch').classList.add('on');
+    } else {
+      // document.documentElement.style.setProperty('--actual-height', `${initialHeight}px`);
+      document.getElementById('full-screen-switch').classList.remove('on');
+    }
+  }
+};
 
 const fonts = ["sans-serif","Montez","Lobster","Josefin Sans","Shadows Into Light","Pacifico","Amatic SC", "Orbitron", "Rokkitt","Righteous","Dancing Script","Bangers","Chewy","Sigmar One","Architects Daughter","Abril Fatface","Covered By Your Grace","Kaushan Script","Gloria Hallelujah","Satisfy","Lobster Two","Comfortaa","Cinzel","Courgette"];
 
 window.onload = async () => {
   console.error('>>>>>>>>>>>>>>>>>>> ONLOAD >>>>>>>>>>>>>>>>>>>>>')
   detectScreen();
-  document.body.style.opacity = '1';
-  await populateUserList(true);
-  await printLobbyMessages(10);
-  document.querySelector('#lobby-chat-window').style.setProperty('scroll-behavior', 'smooth');
-  // await pause(50);
-  animateTitle();
-  await pause(200);
   assignHandlers();  
+  document.body.style.opacity = '1';
+  animateTitle();
+  await populateUserList(true);
+  console.error('finished populate')
+  updateLobbyCount();
+  console.error('finished lobbycount')
+  await printLobbyMessages(10);
+  
+  document.getElementById('lobby-chat-window').style.setProperty('scroll-behavior', 'smooth');
   startPolling();
   let selectedFont = playerState.preferences.customizations['--player-username-font'];
   var fontSelect = document.getElementById('font-select');
@@ -51,13 +69,13 @@ window.onload = async () => {
 };
 
 async function animateTitle() {
-  let letterElementArray = [...document.querySelector('#title-legend').children];
+  let letterElementArray = [...document.getElementById('title-legend').children];
   for (let i = 1; i < letterElementArray.length; i++) {
     letterElementArray[i].classList.add('revealed');
     await pause(50);
   }
   await pause(600);
-  document.querySelector('#title-legend').classList.add('animating');
+  document.getElementById('title-legend').classList.add('animating');
 }
 
 // don't show full screen button if user can't or already is from PWA
@@ -68,7 +86,11 @@ if (!fscreen.fullscreenEnabled || fscreen.fullscreenElement !== null) {
 const initialHeight = window.innerHeight;
 
 function detectScreen() {
-  document.documentElement.style.setProperty('--actual-height', window.innerHeight + 'px');
+  if (CSS.supports('height: 100dvh')) {
+    document.documentElement.style.setProperty('--actual-height', '100dvh');
+  } else {
+    document.documentElement.style.setProperty('--actual-height', window.innerHeight + 'px');
+  }
 }
 
 const game = {
@@ -93,6 +115,12 @@ const game = {
   singlePlayer: false,
 };
 
+let palleteMarkerPositions = {
+  'bg-color': { x: 0, y: 0 },
+  'die-color': { x: 0, y: 0 },
+  'die-dot-color': { x: 0, y: 0 },
+}
+
 let playerState = {
   userName: 'Player',
   visitorID: undefined,
@@ -100,6 +128,7 @@ let playerState = {
   previousStatus: 'title',
   lastMessageSeen: 0,
   initiator: false,
+  latency: 0,
   preferences: {
     animationSpeed: 200,
     CPUTurnSpeed: 500,
@@ -118,75 +147,76 @@ let queryTimes = {
   users: Date.now(),
   handshake: Date.now()
 }
+let clickTimes = {
+  lane: Date.now(),
+  button: Date.now()
+}
+
+let confirmMessages = [
+  'Formulating tubes...',
+  'Reticulating splines...',
+  'Checking for '
+];
+
 let currentDieID = 0;
 
-let knownUser = localStorage.getItem('kbones-prefs');
+let knownUser = window.localStorage.getItem(localStorageName);
 console.log('known user', knownUser);
 console.log('playerState', playerState)
 assimilateKnownUser();
 
 function assignHandlers() {
-  // for testing
-
-  // document.querySelector('#player-area .new-die-box').addEventListener('pointerdown', () => {
-    // if (!game.player.atBat) { dealDie('player', randomInt(1, 6)) };
-  // });
-  // document.querySelector('#opponent-area .new-die-box').addEventListener('pointerdown', () => {
-  //   if (!game.opponent.atBat) { dealDie('opponent', randomInt(1, 6)) }
-  // });
-  // document.querySelector('#opponent-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => {
-    // addDieToLane('opponent', game.opponent.atBat, 0);    
-  // });
-  // document.querySelector('#opponent-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => {
-  //   addDieToLane('opponent', game.opponent.atBat, 1);
-  // });
-  // document.querySelector('#opponent-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => {
-  //   addDieToLane('opponent', game.opponent.atBat, 2);
-  // });
-
+  console.error('>>>>>>>>>>> assignHandlers <<<<<<<<<<<<<');
   document.querySelector('#player-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => {
-    addDieToLane('player', game.player.atBat, 0);
-  });
-  document.querySelector('#player-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => {
-    addDieToLane('player', game.player.atBat, 1);
-  });
-  document.querySelector('#player-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => {
-    addDieToLane('player', game.player.atBat, 2);
-  });
-
-  document.querySelector('#chat-submit-button').addEventListener('click', () => {
-    let message = convertToPlain(document.querySelector('#lobby-chat-field').value.trim());
-    document.querySelector('#lobby-chat-field').value = '';
-    if (message) {
-      sendLobbyMessage(message);
+    if (Date.now() - clickTimes.lane > 500) {
+      addDieToLane('player', game.player.atBat, 0);
+      clickTimes.lane = Date.now();
     }
   });
-  document.querySelector('#confirm-game-button').addEventListener('click', async () => {
-    await getOpponentCustomizations(game.opponent.visitorID);
+  document.querySelector('#player-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => {
+    if (Date.now() - clickTimes.lane > 500) {
+      addDieToLane('player', game.player.atBat, 1);
+      clickTimes.lane = Date.now();
+    }
+  });
+  document.querySelector('#player-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => {
+    if (Date.now() - clickTimes.lane > 500) {
+      addDieToLane('player', game.player.atBat, 2);
+      clickTimes.lane = Date.now();
+    }querySelector
+  });
+
+  document.getElementById('chat-submit-button').addEventListener('click', async (e) => {
+    console.log('hit the button!', Date.now());
+    let message = convertToPlain(document.getElementById('lobby-chat-field').value.trim());
+    document.getElementById('lobby-chat-field').value = '';
+    if (message) {
+      e.target.disabled = true;
+      await sendLobbyMessage(message);
+    }
+  });
+  document.getElementById('confirm-game-button').addEventListener('click', async () => {
+    const preferences = await getOpponentCustomizations(game.opponent.visitorID);
+    game.opponent.preferences = preferences;
+    applyOpponentCustomizations();
     console.warn('confirmer got opponent customizations')
     await reportNewStatus('playing');
     console.warn('confirmer reported "playing" status')
-    // playerState.status = `playing`;
-    // let updateShake = {
-    //   status: playerState.status,
-    //   visitorID: playerState.visitorID,
-    // };
-    // handshake(updateShake);
     dismissConfirmModal();
-    document.querySelector('#player-name').textContent = playerState.userName;
-    document.querySelector('#opponent-name').textContent = game.opponent.userName;
-    document.querySelector('#lobby-screen').classList.add('hidden');
+    document.getElementById('player-name').textContent = playerState.userName;
+    document.getElementById('opponent-name').textContent = game.opponent.userName;
+    document.getElementById('lobby-screen').classList.add('hidden');
     await pause(userPreferences.animationSpeed);
-    document.querySelector('#lobby-screen').classList.remove('blurred');
-    document.querySelector('#lobby-screen').style.display = 'none';
-    document.querySelector('#clear-cookies-button').style.display = 'none';
-    document.querySelector('#header-message').textContent = `Knucklebones game #${game.gameID}`;     
-    await pause(200);
+    document.getElementById('lobby-screen').classList.remove('blurred');
+    document.getElementById('lobby-screen').style.display = 'none';
+    document.getElementById('clear-local-storage-button').style.display = 'none';
+    document.getElementById('header-message').textContent = `Knucklebones game #${game.gameID}`;     
+    // await pause(200);
     callCoinModal(game.firstPlayer);
   });
 
-  document.querySelector('#toggle-ready-button').addEventListener('click', async (e) => {
-    let lobbyPanel = document.querySelector('#lobby-control-panel');
+  document.getElementById('toggle-ready-button').addEventListener('click', async (e) => {
+    let lobbyPanel = document.getElementById('lobby-control-panel');
     if (playerState.status !== 'ready') {
       // playerState.status = 'ready';
       let readyUserList = await getReadyUsers();
@@ -215,8 +245,8 @@ function assignHandlers() {
       e.target.innerHTML = 'Find Game';
     }
   });
-  document.querySelector('#clear-cookies-button').addEventListener('click', () => {
-    localStorage.clear();
+  document.getElementById('clear-local-storage-button').addEventListener('click', () => {
+    window.localStorage.clear();
     window.location.reload(true);
   });
 
@@ -224,48 +254,40 @@ function assignHandlers() {
     if (e.key === 'Enter' || e.keycode === 13) {
       e.preventDefault();
       console.log(e);
-      let lobbyChatField = document.querySelector('#lobby-chat-field');
+      let lobbyChatField = document.getElementById('lobby-chat-field');
       if (document.activeElement === lobbyChatField) {
         console.warn('enter pressed!!');
-        document.querySelector('#chat-submit-button').click();
+        document.getElementById('chat-submit-button').click();
       }
-      let nameEntryField = document.querySelector('#name-entry-field');
+      let nameEntryField = document.getElementById('name-entry-field');
       if (document.activeElement === nameEntryField) {
         console.warn('enter pressed!!');
-        document.querySelector('#enter-lobby-button').click();
+        document.getElementById('enter-lobby-button').click();
       }
     }
-    if (e.key === 'r') {
-      console.log('hit', e.key)
-      getOpponentCustomizations(1298)
-    }
   });
-  document.querySelector('#full-screen-switch').addEventListener('click', async (e) => {
+  document.getElementById('full-screen-switch').addEventListener('click', async (e) => {
     e.target.classList.add('disabled');
     await toggleFullScreen();
-    if (fscreen.fullscreenElement !== null) {
-      e.target.classList.add('on');
-    } else {
-      e.target.classList.remove('on');    
-    }
+    
     e.target.classList.remove('disabled');
   });
-  document.querySelector('#die-radius-slider').addEventListener('input', async (e) => {
+  document.getElementById('die-radius-slider').addEventListener('input', async (e) => {
     let newValue = parseFloat(e.target.value);
     document.documentElement.style.setProperty('--die-border-radius', `calc(var(--die-size) * ${newValue})`);
   });
-  document.querySelector('#die-radius-slider').addEventListener('change', async (e) => {
+  document.getElementById('die-radius-slider').addEventListener('change', async (e) => {
     let newValue = parseFloat(e.target.value);
     playerState.preferences.customizations['--die-border-radius'] = newValue;
     console.log('storing newValue?', newValue);
     await sendPreferences(playerState.preferences);
     storeUserState();
   });
-  document.querySelector('#bg-color-input').addEventListener('input', async (e) => {
+  document.getElementById('bg-color-input').addEventListener('input', async (e) => {
     let newValue = e.target.value;
     document.documentElement.style.setProperty('--player-area-bg-color', newValue);
   });
-  document.querySelector('#bg-color-input').addEventListener('change', async (e) => {
+  document.getElementById('bg-color-input').addEventListener('change', async (e) => {
     let newValue = e.target.value;
     document.documentElement.style.setProperty('--player-area-bg-color', newValue);
     playerState.preferences.customizations['--player-area-bg-color'] = newValue;
@@ -273,12 +295,12 @@ function assignHandlers() {
     await sendPreferences(playerState.preferences);
     storeUserState();
   });
-  document.querySelector('#die-color-input').addEventListener('input', async (e) => {
+  document.getElementById('die-color-input').addEventListener('input', async (e) => {
     let newValue = e.target.value;
     console.log('new is?', newValue)
     document.documentElement.style.setProperty('--die-color', newValue);
   });
-  document.querySelector('#die-color-input').addEventListener('change', async (e) => {
+  document.getElementById('die-color-input').addEventListener('change', async (e) => {
     let newValue = e.target.value;
     document.documentElement.style.setProperty('--die-color', newValue);
     playerState.preferences.customizations['--die-color'] = newValue;
@@ -286,12 +308,12 @@ function assignHandlers() {
     await sendPreferences(playerState.preferences);
     storeUserState();
   });
-  document.querySelector('#die-dot-color-input').addEventListener('input', async (e) => {
+  document.getElementById('die-dot-color-input').addEventListener('input', async (e) => {
     let newValue = e.target.value;
     console.log('new is?', newValue)
     document.documentElement.style.setProperty('--die-dot-color', newValue);
   });
-  document.querySelector('#die-dot-color-input').addEventListener('change', async (e) => {
+  document.getElementById('die-dot-color-input').addEventListener('change', async (e) => {
     let newValue = e.target.value;
     document.documentElement.style.setProperty('--die-dot-color', newValue);
     playerState.preferences.customizations['--die-dot-color'] = newValue;
@@ -299,7 +321,7 @@ function assignHandlers() {
     await sendPreferences(playerState.preferences);
     storeUserState();
   });
-  document.querySelector('#font-select').addEventListener('change', async (e) => {
+  document.getElementById('font-select').addEventListener('change', async (e) => {
     let newValue = e.target.value;
     document.documentElement.style.setProperty('--player-username-font', newValue);
     playerState.preferences.customizations['--player-username-font'] = newValue;
@@ -307,91 +329,242 @@ function assignHandlers() {
     await sendPreferences(playerState.preferences);
     storeUserState();
   });
-  document.addEventListener('visibilitychange', (e) => {
-    let newStatus;
-    if (document.visibilityState === 'visible') {
-      newStatus = playerState.previousStatus;
-    } else {
-      newStatus = 'away';     
-    }
-    reportNewStatus(newStatus);
+
+  document.getElementById('vs-cpu-button').addEventListener('click', async () => {
+    game.singlePlayer = true;
+    resetGame();
+    document.getElementById('title-screen').classList.add('hidden');
+    document.getElementById('lobby-screen').style.display = 'none';
+    document.getElementById('opponent-area').classList.remove('dim');
+    document.getElementById('header-message').textContent = `CPU Battle (difficulty ${playerState.preferences.CPUDifficulty})`;
+    game.opponent.userName = 'CPU';
+    document.getElementById('player-name').textContent = playerState.userName;
+    document.getElementById('opponent-name').textContent = game.opponent.userName;
+    document.getElementById('cpu-game-back-button').style.display = 'block';
+    await pause(200);
+    // document.getElementById('title-screen').style.display = 'none';
+    dealToCPU();
   });
+  document.getElementById('cpu-game-back-button').addEventListener('click', async () => {
+    // document.getElementById('title-screen').style.display = 'grid';
+    document.getElementById('title-screen').classList.remove('hidden');
+    document.getElementById('opponent-area').classList.remove('dim');
+    document.getElementById('player-area').classList.remove('dim');
+    await pause(200);
+    document.getElementById('lobby-screen').style.display = 'flex';
+    playerState.singlePlayer = false;
+    resetGame();
+  });
+  document.getElementById('how-to-play-button').addEventListener('click', async () => {
+    document.getElementById('lobby-screen').style.display = 'none';
+    document.getElementById('opponent-area').classList.remove('dim');
+    document.getElementById('player-name').textContent = playerState.userName;
+    await pause(100);
+    document.getElementById('game-area').classList.add('demo-mode');
+    document.getElementById('title-screen').classList.add('hidden');
+    document.getElementById('header').classList.add('hidden');
+    document.getElementById('tutorial-screen').classList.add('showing');
+    await pause(500);
+    playTutorial();
+  });
+  document.getElementById('tutorial-exit-button').addEventListener('click', async () => {
+    document.getElementById('tutorial-top-text-area').innerHTML = '';
+    document.getElementById('opponent-area').classList.add('dim');
+    document.getElementById('game-area').classList.remove('demo-mode');
+    document.getElementById('title-screen').classList.remove('hidden');
+    document.getElementById('header').classList.remove('hidden');
+    resetGame();
+    document.getElementById('tutorial-screen').classList.remove('showing');
+    await pause(500);
+    document.getElementById('lobby-screen').style.display = 'flex';
+  });
+  document.getElementById('back-to-title-button').addEventListener('click', async () => {
+    if (playerState.status === 'ready') {
+      lobbyPanel.classList.remove('searching');
+    } else if (playerState.status === 'confirming') {
+      return;
+    }
+    await reportNewStatus('title');
+    // await handshake({ visitorID: playerState.visitorID, status: playerState.status });
+    document.getElementById('title-screen').style.display = 'grid';
+    await pause(50);
+    document.getElementById('title-screen').classList.remove('hidden');
+    await pause(50);
+    document.getElementById('lobby-screen').classList.add('hidden');
+  });
+  document.getElementById('options-button').addEventListener('click', async () => {
+    document.getElementById('options-screen').classList.add('showing');
+    
+  });
+  document.getElementById('options-exit-button').addEventListener('click', async () => {
+    document.getElementById('options-screen').classList.remove('showing');    
+  });
+  document.getElementById('cpu-difficulty-slider').addEventListener('change', (e) => {
+    let newDifficulty = parseInt(e.target.value);
+    console.log('set new diff', newDifficulty);
+    // if (newDifficulty === 10) {
+    //   document.documentElement.style.setProperty('--opponent-die-color', 'black');
+    //   document.documentElement.style.setProperty('--opponent-die-dot-color', 'black');
+    // }
+    playerState.preferences.CPUDifficulty = newDifficulty;
+    storeUserState();
+  });
+
+  // document.addEventListener('visibilitychange', (e) => {
+  //   let newStatus;
+  //   if (document.visibilityState === 'visible') {
+  //     newStatus = playerState.previousStatus;
+  //   } else {
+  //     newStatus = 'away';     
+  //   }
+  //   reportNewStatus(newStatus);
+  // });
+
 }
 
 async function reportNewStatus(newStatus) {
   playerState.previousStatus = playerState.status;
   playerState.status = newStatus;
-  await handshake([playerState.visitorID, playerState.status]);
+  await handshake({ status: playerState.status, visitorID: playerState.visitorID });
 }
 
 async function populateUserList(initial) {
-  let nowInSeconds = Math.round(Date.now() / 1000);
+  console.error('starting populateUserList')
+  totalQueries.getUsers++;
+  let nowInSeconds = Math.floor(Date.now() / 1000);
   let userList = await getUsersFromDatabase(initial);
-  let currentUserElement = document.querySelector('#user-list');
-  // document.querySelector('#user-list').innerHTML = '';
+  console.error('finished getting userlist', userList)
+  let currentUserElement = document.getElementById('user-list');
   userList.forEach((user) => {
     let sinceLastPing = nowInSeconds - parseInt(user.lastPing);
+    let timeInLobby = parseInt(user.lastPing) - parseInt(user.joinTime);
+    console.log(user.userName, 'ffuu time here is', timeInLobby);
     let lastPingMessage; // updated for every user
     let rowID = `user-row-${user.visitorID}`;
     let listed = document.querySelector(`#${rowID}`);
     if (listed) { // only replace ping and status
-      console.log(rowID, 'already in list');
-      console.log('user', user, ' sinceLastPing is', sinceLastPing);
-      if (sinceLastPing > 5) {
-        // let minutes = secondsToMinutes(sinceLastPing);
-        // let minuteCount = minutes.minutes;
-        // let minuteDecimal = (minutes.seconds / 60).toFixed(1).toString().slice(2);
-        // lastPingMessage = `${minuteCount}.${minuteDecimal} minutes ago`;
-        // console.log('using minutes', minutes);
-        // console.log('using decimal', minuteDecimal);
-        listed.classList.add('disconnected');
+      if (sinceLastPing > 5 || user.status === 'title') {        
+        listed.classList.add('dying');
       } else {
-        if (sinceLastPing <= 2) {
+        if (sinceLastPing <= 3) {
+          if (listed.classList.contains('late')) {
+            listed.classList.remove('late');
+          }
           lastPingMessage = 'now';
         } else {
+          listed.classList.add('late');
           lastPingMessage = `${sinceLastPing} seconds ago`;          
         }
       }
       document.querySelector(`#${rowID} .user-last-seen`).textContent = lastPingMessage;
       document.querySelector(`#${rowID} .user-status`).textContent = user.status;
+      // let latencyArea = document.querySelector(`#${rowID} .user-latency`);
+      // latencyArea.textContent = user.latency;
+      drawPingBars(`#${rowID} .ping-bars`, user.latency);
       let lastInClasslist = document.querySelector(`#${rowID} .user-status`).classList.item(document.querySelector(`#${rowID} .user-status`).classList.length - 1);
       document.querySelector(`#${rowID} .user-status`).classList.replace(lastInClasslist, user.status);
-    } else if (sinceLastPing < 5) { // not in list but recently handshook
+    } else if ((sinceLastPing < 5 && user.status !== 'title')) {
+      // not in list but recently handshook (or self)
       let userRowClasses = ['user-list-row'];
       let nameListing = user.userName;
-      let lastPingMessage = initial? 'now' : 'just joined';
+      let lastPingMessage = initial ? 'now' : 'just joined';
       if (user.visitorID == playerState.visitorID) {
         userRowClasses.push('self');
         // nameListing += '<p style="font-family: sans-serif"> (you)</p>';
       }
-      console.error('CREATING ENTIRE DIV FOR NEW VISITOR');
+      console.error('CREATING ENTIRE DIV FOR NEW VISITOR', user.userName);
       let newUserRow = document.createElement('div');
       newUserRow.classList.add(...userRowClasses);
       newUserRow.setAttribute('id', rowID);
-      console.log('user is????', user);
       let userFont = user.preferences.customizations['--player-username-font'];
+      let userBgColor = user.preferences.customizations['--player-area-bg-color'];
+      let userDieColor = user.preferences.customizations['--die-color'];
+      let userDieDotColor = user.preferences.customizations['--die-dot-color'];
+      let userDieRadius = user.preferences.customizations['--die-border-radius'];
+      newUserRow.style.setProperty('background-color', userBgColor);
       newUserRow.innerHTML = `
-        <div style="font-family: ${userFont}">${nameListing}</div>
-        <div>#${user.visitorID}</div>
-        <div class="user-status">${user.status}</div>
-        <div class="user-last-seen">${lastPingMessage}</div>
+      <div style="font-family: ${userFont}">${nameListing}</div>
+      <div class="user-status">${user.status}</div>
+      <div class="user-last-seen">${lastPingMessage}</div>
+      <div id="ping-bars-${user.visitorID}" class="ping-bars">
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+      </div>
       `;
+      let displayDie = produceDieHTML(randomInt(1, 6), `display-die-${user.visitorID}`, 'option');
+      displayDie.style.setProperty('background-color', userDieColor);
+      displayDie.style.borderRadius = `calc(var(--die-size) * ${userDieRadius})`;
+      [...displayDie.children[0].children].forEach((dot) => {
+        dot.style.backgroundColor = userDieDotColor;
+      });
+      newUserRow.prepend(displayDie);
       currentUserElement.appendChild(newUserRow);
+
+      drawPingBars(`#ping-bars-${user.visitorID}`, user.latency);
+
       document.querySelector(`#${rowID} .user-status`).classList.add('lobby');
-
-
       newUserRow.classList.add('newly-joined');
       setTimeout(() => {
         newUserRow.classList.remove('newly-joined');
-      }, 400);      
+      }, 500);
     } else {
-      console.log(user.userName, 'showed up in the list, but too high sinceLastPing to print')
+      if (sinceLastPing >= 5) {
+        console.warn(user.userName, 'showed up in the DB list, but too high sinceLastPing to print');
+      } else {
+        console.warn(user.userName, 'showed up in the DB list but is at title screen');
+      }
     }
   });  
-  let disconnectedArray = [...document.querySelectorAll(`.disconnected`)];
+  let disconnectedArray = [...document.getElementsByClassName('dying')];
   for (const doomedUser in disconnectedArray) {
-    currentUserElement.removeChild(disconnectedArray[doomedUser]);
-  };  
+    const doomedElement = disconnectedArray[doomedUser];
+    doomedElement.classList.add('disconnected');
+    await pause(300);
+    currentUserElement.removeChild(doomedElement);
+  };
+}
+function drawPingBars(query, ping) {
+  let pingBars = document.querySelector(query);
+  let barsShowing = 6;
+  let amountOver = ping - 125;
+  if (amountOver < 0) amountOver = 0;
+  barsShowing -= Math.round(amountOver / 24);
+  if (barsShowing < 0) barsShowing = 0;
+  console.log('fucker gets', barsShowing, 'bars for ping', ping);
+  let barArray = [...pingBars.children];
+  for (let i = 0; i < barArray.length; i++) {
+    if (i >= barsShowing) {
+      barArray[i].classList.add('flattened');
+    } else {
+      barArray[i].classList.remove('flattened');
+    }
+  }
+  pingBars.className = 'ping-bars';
+  if (barsShowing >= 4) {
+
+  } else if (barsShowing >= 2) {
+    pingBars.classList.add('medium');
+  } else {
+    pingBars.classList.add('low');
+  }
+}
+
+function updateLobbyCount() {
+  // let totalUsersListed = [...document.querySelectorAll('.user-list-row:not(.dying)')].filter(row => row.id.indexOf((playerState.visitorID + '') === -1)).length;
+  let totalUsersListed = [...document.getElementsByClassName('user-list-row')].filter((row) => (row.id.indexOf(playerState.visitorID + '' === -1) && !row.classList.contains('dying'))).length;
+  console.log('raw totalusers is', [...document.getElementsByClassName('user-list-row')]);
+  let lobbyReport = `${totalUsersListed} other players online`;
+  if (!totalUsersListed) {
+    lobbyReport = 'no other players online :(';
+  } else if (totalUsersListed === 1) {
+    lobbyReport = '1 other player online';
+  }
+  document.getElementById('lobby-report').textContent = lobbyReport;
+  console.log(totalUsersListed, 'users total.');
 }
 
 function sortByLastSeen(userList) {
@@ -415,41 +588,38 @@ const userPreferences = {
 }
 
 // const pollInterval = 1500;
-const pollInterval = 1200;
+const pollInterval = 900;
 
-async function performInitialHandshake(enteredName) {  
-  console.warn('---------> INITIAL handshake!');
+async function performInitialHandshake(nameEntered) {  
   const firstShakeData = {
-    userName: enteredName,
+    userName: nameEntered,
     status: 'lobby',
   };
+  console.warn('---------> INITIAL handshake!', firstShakeData);
   const visitorID = await handshake(firstShakeData);
-  document.querySelector('#player-name').innerHTML = enteredName + ' #' + visitorID;
   playerState.visitorID = visitorID;
-  playerState.userName = enteredName;
+  playerState.userName = nameEntered;
   storeUserState();
   await sendPreferences(playerState.preferences);
+  document.getElementById('demo-username').textContent = nameEntered;
   console.warn('established new user #' + visitorID);
-  // setTimeout(async () => {
-    // console.warn('shaking...');
-    // let updateShake = {
-    //   status: playerState.status,
-    //   visitorID: playerState.visitorID,
-    // };
-    // let startedShakeAt = Date.now();
-    // await handshake(JSON.stringify(updateShake));
-    // let shakeTime = Date.now() - startedShakeAt;
-    // console.warn('took', shakeTime);
-  // }, 1000);  
+  knownUser = playerState; // so that leaving and clicking Enter Lobby again will not create new user
 }
 
 let pollLoop;
 let confirmWaitTime = 0;
+
 function startPolling() {
   // let lastPoll = 0;  
   pollLoop = setInterval(async () => {
     if (playerState.status === 'title') {
-      // console.log('only handshaking due to title screen');
+      if ((Date.now() - queryTimes.users) > 3000) {
+        console.log('only querying lobby users due to title screen (uncomment below to actually do it!)');
+        await populateUserList();
+        updateLobbyCount();
+      } else {
+        // console.error('skipped title populate due to since last < 5000', Date.now() - queryTimes.users);
+      }
       // let updateShake = {
       //   visitorID: playerState.visitorID,
       //   status: playerState.status,
@@ -461,7 +631,7 @@ function startPolling() {
       let now = Date.now();
       // console.green(`POLLING LOBBY ${!lastPoll || now - lastPoll}`)
       // lastPoll = now;
-      let waitingForConfirm = document.querySelector('#confirm-game-modal').classList.contains('showing');
+      let waitingForConfirm = document.getElementById('confirm-game-modal').classList.contains('showing');
       if (waitingForConfirm) {
         // console.green('ALREADY FOUND READY OPPONENT');
         confirmWaitTime += pollInterval;
@@ -480,11 +650,11 @@ function startPolling() {
               await reportNewStatus('confirming');
               // playerState.status = 'confirming';
               // await handshake([playerState.visitorID, playerState.status]);
-              document.querySelector('#opponent-check').classList.add('checked');
+              document.getElementById('opponent-check').classList.add('checked');
               await pause(500);
-              document.querySelector('#player-check').classList.add('checked');
-              document.querySelector('#confirm-message').textContent = 'CONNECTED!';
-              document.querySelector('#confirm-game-button').disabled = false;
+              document.getElementById('player-check').classList.add('checked');
+              document.getElementById('confirm-message').textContent = 'CONNECTED!';
+              document.getElementById('confirm-game-button').disabled = false;
             } else {
               console.log('checked but did not find a newly-created game with both players');
             }
@@ -495,11 +665,11 @@ function startPolling() {
           console.log('i am INITIATOR, checking if opponent status is confirming --------->');
           let opponentStatus = await checkUserStatus(game.opponent.visitorID);
           if (opponentStatus === 'confirming') {
-            document.querySelector('#opponent-check').classList.add('checked');
+            document.getElementById('opponent-check').classList.add('checked');
             await pause(500);
-            document.querySelector('#player-check').classList.add('checked');
-            document.querySelector('#confirm-message').textContent = 'CONNECTED!';
-            document.querySelector('#confirm-game-button').disabled = false;
+            document.getElementById('player-check').classList.add('checked');
+            document.getElementById('confirm-message').textContent = 'CONNECTED!';
+            document.getElementById('confirm-game-button').disabled = false;
             // playerState.status = 'confirming';
             await reportNewStatus('confirming');
           } else {
@@ -531,8 +701,8 @@ function startPolling() {
           console.error('throttled populateUserList', (now - queryTimes.users));
         }        
         if (now - queryTimes.lobbyMessages >= (pollInterval / 1.5)) {
+          console.log('poll calling printlobbymessages')
           printLobbyMessages();
-          await pause(200);
         } else {
           console.error('throttled printLobbyMessages', (now - queryTimes.lobbyMessages));
         }         
@@ -547,7 +717,7 @@ function startPolling() {
         let opponentStatus = await checkUserStatus(game.opponent.visitorID);
         if (opponentStatus.indexOf('playing') !== -1) { // opponent has flipped
           game.started = true;
-          document.querySelector('#opponent-area').classList.remove('dim');
+          document.getElementById('opponent-area').classList.remove('dim');
           console.green('--------- GAME START! ---------------------------')
         }
       } else { // both have flipped and the game has started
@@ -609,30 +779,30 @@ function contestantWithID(visitorID) {
 }
 
 async function callCoinModal(firstTurnID) { // called once at the beginning of each game
-  let modal = document.querySelector('#coin-flip-modal');
+  let modal = document.getElementById('coin-flip-modal');
   if (modal.classList.contains('showing')) {
     return;
   }
   console.log('game obj is', game)
   console.warn('CALLING COIN MODAL', firstTurnID);
   modal.style.display = 'flex';
-  document.querySelector('#coin-name').textContent = playerState.userName;
+  document.getElementById('coin-name').textContent = playerState.userName;
   await pause(100);
   modal.classList.add('showing');
   await pause(userPreferences.animationSpeed);
-  let coin = document.querySelector('#coin');
+  let coin = document.getElementById('coin');
   let flipCount = 5;
   while (flipCount) {
     coin.classList.add('turned');
     await pause(100);
     if (flipCount % 2 === 0) {
-      document.querySelector('#coin-name').textContent = playerState.userName;
+      document.getElementById('coin-name').textContent = playerState.userName;
     } else {
-      document.querySelector('#coin-name').textContent = game.opponent.userName;
+      document.getElementById('coin-name').textContent = game.opponent.userName;
     }
     coin.classList.remove('turned');
     await pause(100);
-    if (flipCount <= 4 && document.querySelector('#coin-name').textContent === contestantWithID(firstTurnID).userName) {
+    if (flipCount <= 4 && document.getElementById('coin-name').textContent === contestantWithID(firstTurnID).userName) {
       flipCount = 0;
     } else {
       flipCount--
@@ -660,16 +830,15 @@ async function callCoinModal(firstTurnID) { // called once at the beginning of e
   // }
 }
 async function callConfirmModal(opponent) {
-  let modal = document.querySelector('#confirm-game-modal');
+  let modal = document.getElementById('confirm-game-modal');
   if (modal.classList.contains('showing')) {
     return;
   }
   console.error('CALLING CONFIRM MODAL')
-  document.querySelector('#lobby-screen').classList.add('blurred');
+  document.getElementById('lobby-screen').classList.add('blurred');
   modal.style.display = 'flex';
-  document.querySelector('#player-confirm-name').textContent = playerState.userName;
-  document.querySelector('#opponent-confirm-name').textContent = opponent.userName;
-  // document.querySelector('#confirm-message').textContent = opponent.userName;
+  document.getElementById('player-confirm-name').textContent = playerState.userName;
+  document.getElementById('opponent-confirm-name').textContent = opponent.userName;
   await pause(50);
   modal.classList.add('showing');
   if (playerState.initiator) {
@@ -689,20 +858,20 @@ async function callConfirmModal(opponent) {
     game.atBat = parseInt(newGame[2]);
 
     console.log('now local game obj is', game);
-    document.querySelector('#player-check').classList.add('checked');
+    document.getElementById('player-check').classList.add('checked');
   } else {
     console.log('not the initiator');
   }
 }
 async function dismissConfirmModal() {
-  let modal = document.querySelector('#confirm-game-modal');
+  let modal = document.getElementById('confirm-game-modal');
   modal.classList.remove('showing');
-  document.querySelector('#lobby-screen').classList.remove('blurred');
+  document.getElementById('lobby-screen').classList.remove('blurred');
   await pause(userPreferences.animationSpeed);
   modal.style.display = 'none';
-  document.querySelector('#confirm-message').textContent = 'Connecting players...';
-  document.querySelector('#opponent-check').classList.remove('checked');
-  document.querySelector('#player-check').classList.remove('checked');
+  document.getElementById('confirm-message').textContent = 'Connecting players...';
+  document.getElementById('opponent-check').classList.remove('checked');
+  document.getElementById('player-check').classList.remove('checked');
 }
   
 
@@ -720,8 +889,7 @@ export async function introduceToLobby() {
   } else { // nothing was in local storage
     console.warn('beginHandshake !knownUser: performInitialHandshake');
     await performInitialHandshake(playerState.userName);
-  }
-   // so that self is in list sooner
+  }  
 }
 export async function beginHandshake() {
   game.player.userName = playerState.userName;
@@ -737,7 +905,6 @@ export async function beginHandshake() {
     console.warn('beginHandshake !knownUser: performInitialHandshake');
     await performInitialHandshake(playerState.userName);
   }
-   // so that self is in list sooner
 }
 
 function validateName(e) {
@@ -748,10 +915,30 @@ function validateName(e) {
   document.getElementById('submit-score-button').disabled = !valid;
   e.target.value = enteredValue.replace(/\s+/g, '').slice(0, 10);
 }
+let dieDotSlots = [
+  [5], [3, 7], [3, 5, 7], [1, 3, 7, 9], [1, 3, 5, 7, 9], [1, 3, 4, 6, 7, 9]
+];
+function produceDieHTML(denomination, id, dieClass) {
+  let dieElement = document.createElement('div');
+  dieElement.setAttribute('id', id);
+  dieElement.classList.add(dieClass);
+  let dotGrid = document.createElement('div');
+  dieElement.classList.add('die', 'user-list', 'showing');
+  dotGrid.classList.add('die-dot-grid');
+  for (let i = 0; i < 9; i++) {
+    dotGrid.innerHTML += `<div class='die-dot'></div>`
+  }
+  dieDotSlots[denomination - 1].forEach((ind) => {
+    [...dotGrid.children][ind-1].classList.add('filled');
+  });
+  dieElement.appendChild(dotGrid);
+  console.log('made element', dieElement)
+  return dieElement;
+}
 
 class Die {
   constructor(denomination, targetDivQuery, lane, demo) {
-    if (demo && !document.querySelector('#tutorial-screen').classList.contains('showing')) {
+    if (demo && !document.getElementById('tutorial-screen').classList.contains('showing')) {
       console.green('cancelled die creation because tutorial not showing');
     }
     this.denomination = denomination;
@@ -903,6 +1090,8 @@ async function destroyDie(query, crosscheck) {
   dieElement.parentNode.removeChild(dieElement);
 }
 
+
+
 async function dealDie(contestant, denomination) {
   console.green('dealDie DEALING a', denomination, 'to', contestant);
   console.log('dealDie DEALING a', denomination, 'to', contestant);
@@ -925,17 +1114,14 @@ const totalDiceInPlay = (contestant) =>
 
 async function addDieToLane(contestant, denomination, lane, demo) {
   console.warn(contestant, 'ADDING DEALING a', denomination, 'to', contestant, 'lane', lane);
-  if (demo && !document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (demo && !document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('cancelled addDieToLane due to tutorial closed');
     return;
   }
   game[contestant].lanes[lane].push(denomination); // get rid of game[contestant].lanes
-
   let chosenLane = lane + 1;
-
   const newDie = new Die(denomination, `#${contestant}-area .die-lane:nth-child(${chosenLane})`, lane);
   game[contestant].laneElements[lane].push(newDie);
-  
   document.querySelector(`#${contestant}-area .new-die-box`).classList.remove('highlighted');
   [...document.querySelectorAll(`#${contestant}-area .die-lane`)].forEach((lane) => {
     lane.classList.remove('available');
@@ -944,23 +1130,25 @@ async function addDieToLane(contestant, denomination, lane, demo) {
   await destroyDie(`#${contestant}-area .new-die-box .die`);
   game[contestant].atBat = undefined;
   updateContestantScore(contestant);
-  if (!demo) {
+  if (!demo) { 
     await checkForCrossMatches(contestant, newDie);
     colorMatchingDice(contestant);
-    await pause(userPreferences.animationSpeed);
+    // await pause(userPreferences.animationSpeed);
     if (totalDiceInPlay(contestant) === 9) {
       let winner, loser;
       if (game.player.totalScore > game.opponent.totalScore) {
         console.error('------------------- WINNER:', game.player.userName, '-', game.player.totalScore, ' vs LOSER:', game.opponent.userName, '-', game.opponent.totalScore);
         winner = 'player';
-        loser = 'opponent';
-        sendMove(lane, true);
+        loser = 'opponent';        
       } else if (game.player.totalScore < game.opponent.totalScore) {
         console.error('------------------- WINNER:', game.opponent.userName, '-', game.opponent.totalScore, ' vs LOSER:', game.player.userName, '-', game.player.totalScore);
         winner = 'opponent';
         loser = 'player';
       } else {
         alert(`IT'S A GODDAMNED TIE`);
+      }
+      if (contestant === 'player') {
+        sendMove(lane, true);
       }
       await pause(100);
       document.querySelector(`#${winner}-area.turn-area`).classList.add('won');
@@ -1064,7 +1252,8 @@ async function checkForCrossMatches(aggressor, attackingDie) {
     }
   console.error('checkForCrossMatches produced doomedDice', doomedDice);
   if (doomedDice.length) {
-    attackerElement.classList.add('angry');
+    await pause(250);
+    attackerElement.classList.add('attacking');
     for (const ind in doomedDice) {
       let victimObj = doomedDice[ind];
       let victimElement = document.querySelector(`#${victimObj.elementID}`);
@@ -1075,7 +1264,7 @@ async function checkForCrossMatches(aggressor, attackingDie) {
       console.warn('after doomedDice loop', ind, 'game[nemesis].laneElements is now', game[nemesis].laneElements);
     }
     await pause(userPreferences.animationSpeed);
-    attackerElement.classList.remove('angry');
+    attackerElement.classList.remove('attacking');
     await pause(userPreferences.animationSpeed);
     updateContestantScore(nemesis);
   }
@@ -1126,7 +1315,7 @@ function colorMatchingDice(contestant) {
 function resetGame() {
   game.player.laneElements = [[], [], []];
   game.opponent.laneElements = [[], [], []];
-  [...document.querySelectorAll(`.die`)].forEach((die) => {
+  [...document.querySelectorAll(`.die:not(.options):not(.user-list)`)].forEach((die) => {
     die.parentNode.removeChild(die);
   });
   [...document.querySelectorAll(`.turn-area`)].forEach((area) => {
@@ -1144,38 +1333,89 @@ function resetGame() {
   console.log(playerState)
 }
 
+// document.body.addEventListener('fullscreenchange', async (e) => {
+//   console.log(e);
+//   if (document.fullscreenElement) {
+//     document.getElementById('full-screen-switch').classList.add('on');
+//   } else {
+//     document.documentElement.style.setProperty('--actual-height', `${initialHeight}px`);
+//     document.getElementById('full-screen-switch').classList.remove('on');
+//   }
+// });
+// fscreen.onfullscreenchange = (e) => {
+//   if (fscreen.fullscreenElement) {
+//     document.getElementById('full-screen-switch').classList.add('on');
+//   } else {
+//     document.documentElement.style.setProperty('--actual-height', `${initialHeight}px`);
+//     document.getElementById('full-screen-switch').classList.remove('on');
+//   }
+// }
+
 async function toggleFullScreen() {
+  let resizeTries = 0;
   if (fscreen.fullscreenElement !== null) {
-    await fscreen.exitFullscreen(document.body);
+    fscreen.exitFullscreen(document.body);
+    document.getElementById('full-screen-switch').classList.remove('on');
+    // await pause(500)
     document.documentElement.style.setProperty('--actual-height', `${initialHeight}px`);
     // document.getElementById('full-screen-off-icon').classList.add('hidden');
-    // document.getElementById('full-screen-icon').classList.remove('hidden');
-    
+    // document.getElementById('full-screen-icon').classList.remove('hidden');   
   } else {
-    await fscreen.requestFullscreen(document.body);
+    fscreen.requestFullscreen(document.body);
+    document.getElementById('full-screen-switch').classList.add('on');
+    // detectScreen();
     // document.getElementById('full-screen-off-icon').classList.remove('hidden');
     // document.getElementById('full-screen-icon').classList.add('hidden');
   }
+  while (window.innerHeight === initialHeight && resizeTries < 20) {
+    console.warn('not grown yet!', window.innerHeight, '===', initialHeight);
+    await pause(1);
+    resizeTries++;
+  }
+  detectScreen();
 }
 
 function applyPlayerCustomizations() {
-  document.querySelector('#cpu-difficulty-slider').value = playerState.preferences.CPUDifficulty;
-  document.querySelector('#die-radius-slider').value = playerState.preferences.customizations['--die-border-radius'];
-  document.querySelector('#bg-color-input').value = playerState.preferences.customizations['--player-area-bg-color'];
-  document.querySelector('#die-color-input').value = playerState.preferences.customizations['--die-color'];
-  document.querySelector('#die-dot-color-input').value = playerState.preferences.customizations['--die-dot-color'];    
+  document.getElementById('cpu-difficulty-slider').value = playerState.preferences.CPUDifficulty;
+  document.getElementById('die-radius-slider').value = playerState.preferences.customizations['--die-border-radius'];
+  document.getElementById('bg-color-input').value = playerState.preferences.customizations['--player-area-bg-color'];
+  document.getElementById('die-color-input').value = playerState.preferences.customizations['--die-color'];
+  document.getElementById('die-dot-color-input').value = playerState.preferences.customizations['--die-dot-color'];    
 }
+
+function getStorageSize() {
+  let data = '';
+  for (var key in window.localStorage) {
+    if (window.localStorage.hasOwnProperty(key)) {
+      data += window.localStorage[key];
+    }
+  }
+  let size = data ? ((data.length * 16) / (8 * 1024)).toFixed(3) : '0';
+  if (size < 1) {
+    size *= 1000;
+    size += ' bytes'
+  } else {
+    size += ' kb'
+  }
+  return size;
+};
 
 function storeUserState() {
   let toStore = JSON.stringify({ ...playerState});
-  localStorage.setItem('kbones-prefs', toStore);
+  window.localStorage.setItem(localStorageName, toStore);
   console.log('---------> stored user', playerState);
+  document.getElementById('storage-space-used').textContent = getStorageSize();
+  if (document.getElementById('clear-local-storage-button').disabled) {
+    document.getElementById('clear-local-storage-button').disabled = false;
+  }
+  
+
+  console.log('size is', window.localStorage[localStorageName].length)
 }
 function loadUserState(rawData) {
   let newState = JSON.parse(rawData);
   playerState = { ...newState };
   playerState.status = 'title';
-
   applyPlayerCustomizations();
 
   let newRadius = parseFloat(playerState.preferences.customizations['--die-border-radius']);
@@ -1186,6 +1426,10 @@ function loadUserState(rawData) {
   document.documentElement.style.setProperty('--player-username-font', playerState.preferences.customizations['--player-username-font']);
   // document.documentElement.style.setProperty('--die-animation-speed', playerState.preferences.animationSpeed + 'ms');
   console.warn('loaded user', playerState);
+  document.getElementById('storage-space-used').textContent = getStorageSize();
+  if (document.getElementById('clear-local-storage-button').disabled) {
+    document.getElementById('clear-local-storage-button').disabled = false;
+  }
 }
 
 function applyOpponentCustomizations() {
@@ -1219,37 +1463,47 @@ function convertToPlain(html) {
 
 async function printLobbyMessages(forceHistory) {
   let messagesArray = await getLobbyMessages(forceHistory);
+  console.log('printlobb got messages', messagesArray)
   if (messagesArray.length === 0) {
     return;
   }
-  let highestMessageID = messagesArray[messagesArray.length-1].messageID;
-  let chatWindow = document.querySelector('#lobby-chat-window');
+  let highestMessageID = messagesArray[messagesArray.length - 1].messageID;
+  let chatWindow = document.getElementById('lobby-chat-window');
+  playerState.lastMessageSeen = highestMessageID
+  for (const row in messagesArray) {
+    if (!forceHistory && messagesArray[row].messageID < playerState.lastMessageSeen) {
+      console.error('ABOUT TO REPRINT A SEEN MESSAGE! highestmessageID', highestMessageID, 'when lastmessseen', playerState.lastMessageSeen);
+    } else {
+      let messageRow = messagesArray[row];
+      let preferences = await getOpponentCustomizations(messageRow.visitorID);
+      let rawDate = new Date(messageRow.timePosted);
+      let convertedTime = rawDate.toLocaleString([], { hour: 'numeric', minute: 'numeric', hour12: true });
+      let timeOfDay = `${convertedTime.slice(0, -3)} ${convertedTime.slice(-2).toLowerCase()}`;
+      let messageClass = parseInt(messageRow.visitorID) === playerState.visitorID ? 'chat-message self' : 'chat-message';
+      let rowHTML = `
+        <div id="${messageRow.messageID}" class="${messageClass}">
+          <div><span style="font-family: ${preferences.customizations['--player-username-font']}">${messageRow.userName}</span> (#${messageRow.visitorID})</div>
+          <div>message #${messageRow.messageID}</div>
+          <div>${convertToPlain(messageRow.message)}</div>
+          <div>${timeOfDay}</div>
+        </div>
+      `;
+      chatWindow.innerHTML += rowHTML;      
+    }
+  };
   // playerState.lastMessageSeen = highestMessageID;
-  messagesArray.forEach((messageRow) => {
-    let rawDate = new Date(messageRow.timePosted);
-    let convertedTime = rawDate.toLocaleString([], { hour: 'numeric', minute: 'numeric', hour12: true });
-    let timeOfDay = `${convertedTime.slice(0, -3)} ${convertedTime.slice(-2).toLowerCase()}`;
-    let messageClass = parseInt(messageRow.visitorID) === playerState.visitorID ? 'chat-message self' : 'chat-message';
-    let rowHTML = `
-      <div id="${messageRow.messageID}" class="${messageClass}">
-        <div>${messageRow.userName} (#${messageRow.visitorID})</div>
-        <div>message #${messageRow.messageID}</div>
-        <div>${convertToPlain(messageRow.message)}</div>
-        <div>${timeOfDay}</div>
-      </div>
-    `;
-    chatWindow.innerHTML += rowHTML;
-  });
-  console.log('about to apply highestmessageID', highestMessageID);
-  console.log('when playerState.lastMessageSeen is', playerState.lastMessageSeen);
-  playerState.lastMessageSeen = highestMessageID;
   chatWindow.scrollTop = chatWindow.scrollHeight;
   if (!forceHistory) {
     storeUserState();
   }
+  if (document.getElementById('chat-submit-button').disabled) {
+    document.getElementById('chat-submit-button').disabled = false;
+  }
 }
 
 async function getOpponentCustomizations(opponentID) {
+  console.log('querying for prefs of', opponentID)
+  console.log(opponentID)
   let response = await axios({
     method: 'post',
     url: 'https://mikedonovan.dev/kbones/php/getopponentcustomizations.php',
@@ -1257,12 +1511,14 @@ async function getOpponentCustomizations(opponentID) {
       'Content-type': 'application/x-www-form-urlencoded',
     },
     data: {
-      visitorID: opponentID,
+      visitorID: parseInt(opponentID),
     },
   });
+  console.log('raw is', response)
   const preferences = JSON.parse(response.data.preferences);
-  game.opponent.preferences = preferences;
-  applyOpponentCustomizations();
+  return preferences;
+  // game.opponent.preferences = preferences;
+  // applyOpponentCustomizations();
 }
 
 async function postNewMove(moveData) {
@@ -1356,8 +1612,6 @@ async function getRandomFlipFromDatabase() {
 }
 async function getUsersFromDatabase(initial) {
   console.warn('CALLING getUsersFromDatabase');
-  let calledAt = Date.now();
-  queryTimes.users = calledAt;
   let response = await axios({
     method: 'get',
     url: 'https://mikedonovan.dev/kbones/php/getusers.php',
@@ -1365,22 +1619,22 @@ async function getUsersFromDatabase(initial) {
       'Content-type': 'application/x-www-form-urlencoded',
     }
   });
+  console.log('getUsers got', response.data)
+  queryTimes.users = Date.now();  
   const usersArray = [...response.data];
   usersArray.forEach((row, i, self) => {
     self[i] = JSON.parse(row);
     self[i].preferences = JSON.parse(self[i].preferences);
-    console.log('parsed pref', self[i]);
   });
   if (initial) {
-    // document.querySelector('#enter-lobby-button').disabled = false;
+    // document.getElementById('enter-lobby-button').disabled = false;
   }
-  console.warn('got', usersArray.length, 'users in', Date.now() - calledAt);
+  console.log('getUsers parsed', usersArray)
   return usersArray;
 }
 async function getReadyUsers() {
   console.warn('CALLING getReadyUsers');
-  let calledAt = Date.now();
-  queryTimes.users = calledAt;
+  queryTimes.users = Date.now();
   let response = await axios({
     method: 'get',
     url: 'https://mikedonovan.dev/kbones/php/getreadyusers.php',
@@ -1392,11 +1646,9 @@ async function getReadyUsers() {
   usersArray.forEach((row, i, self) => {
     self[i] = JSON.parse(row)
   });
-  console.warn('got', usersArray.length, 'READY users in', Date.now() - calledAt);
   return usersArray;
 }
 async function getLobbyMessages(forceHistory=0) {
-  let calledAt = Date.now(); 
   queryTimes.lobbyMessages = Date.now();
   let response = await axios({
     method: 'post',
@@ -1412,11 +1664,11 @@ async function getLobbyMessages(forceHistory=0) {
   messagesArray.forEach((row, i, self) => {
     self[i] = JSON.parse(row);
   });
-  console.warn('got', messagesArray.length, 'messasges in', Date.now() - calledAt);
   console.log(messagesArray)
   return messagesArray.reverse();
 }
 async function sendLobbyMessage(message) {
+  
   let messageData = {
     userName: playerState.userName,
     visitorID: playerState.visitorID,
@@ -1432,14 +1684,14 @@ async function sendLobbyMessage(message) {
     },
     data: messageData
   });
-  printLobbyMessages();
+  // await printLobbyMessages();
   console.log(response);
   return response;
 }
 
 async function sendPreferences(preferences) {
   if (!playerState.visitorID) {
-    console.log('no');
+    console.log('no visitorID associated');
     return;
   }
   const response = await axios({
@@ -1468,12 +1720,14 @@ async function changeUserName(newName) {
     }),
   });
   console.log('changed name?', response.data);
-  document.querySelector('#user-list').innerHTML = '';
+  document.getElementById('user-list').innerHTML = '';  
+  document.getElementById('demo-username').textContent = newName;
 }
 async function handshake(shakeData) {
-  let startedShake = Date.now();
+  shakeData.latency = playerState.latency;
+  console.warn('shaking with', shakeData);
   queryTimes.handshake = Date.now();
-  
+  let startedShake = Date.now();
   const shakeResult = await axios({
     method: 'post',
     url: 'https://mikedonovan.dev/kbones/php/handshake.php',
@@ -1483,60 +1737,70 @@ async function handshake(shakeData) {
     data: shakeData
   });
   let shakeTime = Date.now() - startedShake;
-  document.querySelector('#debug').innerHTML = 'ping: ' + shakeTime;
-  console.warn(shakeResult.data + ' in ' + shakeTime);
+  document.getElementById('debug').innerHTML = 'ping: ' + shakeTime;
+  console.warn('got shakeResult', shakeResult.data + ' in ' + shakeTime);
+  playerState.latency = shakeTime;
   return shakeResult.data
 }
 
-document.querySelector('#enter-lobby-button').addEventListener('click', async () => {  
-  let nameEntered = document.querySelector('#name-entry-field').value;
-  nameEntered = convertToPlain(document.querySelector('#name-entry-field').value);
+document.getElementById('enter-lobby-button').addEventListener('click', async () => {
+  console.log('playerstate when enter lobby clicked:', playerState)
+  let nameEntered = document.getElementById('name-entry-field').value;
+  nameEntered = convertToPlain(document.getElementById('name-entry-field').value);
   if (nameEntered.trim().length < 2 || nameEntered.trim().length > 18) {
     return;
   }
   if (knownUser) {
     if (playerState.visitorID) {
-      console.log('button comparing old', playerState.userName, 'to entered', nameEntered)
-      if (playerState.userName !== nameEntered) {
+      if (playerState.userName !== nameEntered) {        
         console.error('known visitor changing name', playerState.userName, 'to', nameEntered);
         playerState.userName = nameEntered;
         storeUserState();
         await changeUserName(nameEntered);
-        document.querySelector('#user-list').innerHTML = '';
+        document.getElementById('user-list').innerHTML = ''; // only need to remove self
+        await reportNewStatus('lobby');
         await populateUserList();
       } else {
-        console.warn('known visitor using same name');
-        populateUserList();    
+        console.log('known same-named user calling populate');
+        await reportNewStatus('lobby');
+        await populateUserList();    
       }
     } else {
       playerState.userName = nameEntered;
       console.warn('known but no ID: performInitialHandshake');
-      await performInitialHandshake(playerState.userName);
+      playerState.status = 'lobby';
+      await performInitialHandshake(playerState.userName);  
     }
   } else {
     playerState.userName = nameEntered;
     console.warn('completely unknown: performInitialHandshake');
+    playerState.status = 'lobby';
     await performInitialHandshake(playerState.userName);
   }
   
-  reportNewStatus('lobby');
-  
-  document.querySelector('#lobby-screen').classList.remove('hidden');
+
+  document.getElementById('cpu-game-back-button').style.display = 'none';
+  document.getElementById('lobby-screen').classList.remove('hidden');
   await pause(100);
-  document.querySelector('#title-screen').classList.add('hidden');
+  document.getElementById('title-screen').classList.add('hidden');
   await pause(100);
-  document.querySelector('#title-screen').style.display = 'none';
+  document.getElementById('title-screen').style.display = 'none';
+  console.log('finished func')
 });
-document.querySelector('#name-entry-field').addEventListener('input', (e) => {
-  if (e.target.value.trim().length > 2) {
-    document.querySelector('#enter-lobby-button').disabled = false;
+document.getElementById('name-entry-field').addEventListener('input', (e) => {
+  let trimmed = e.target.value.trim(); 
+  if (trimmed.length > 2) {
+    document.getElementById('enter-lobby-button').disabled = false;
+    const previewString = convertToPlain(trimmed);
+    document.getElementById('demo-username').textContent = previewString;
   } else {
-    document.querySelector('#enter-lobby-button').disabled = true;
+    document.getElementById('demo-username').textContent = 'Player';
+    document.getElementById('enter-lobby-button').disabled = true;
   }
   // e.target.value = e.target.value.trim();
 });
 
-// let knownUser = localStorage.getItem('kbones-prefs');
+// let knownUser = window.localStorage.getItem(localStorageName);
 // assimilateKnownUser();
 
 async function assimilateKnownUser() {
@@ -1545,23 +1809,22 @@ async function assimilateKnownUser() {
     console.log('assimilate found playerstate', playerState)
     if (playerState.visitorID) {
       console.green('KNOWN VISITOR (has entered a username)');
-      document.querySelector('#name-entry-field').value = playerState.userName;
-      document.querySelector('#enter-lobby-button').disabled = false;
-      document.querySelector('#demo-username').textContent = playerState.userName;
+      document.getElementById('name-entry-field').value = playerState.userName;
+      document.getElementById('enter-lobby-button').disabled = false;
+      document.getElementById('demo-username').textContent = playerState.userName;
       reportNewStatus('title');
-      // await handshake({ visitorID: playerState.visitorID, status: 'title' });
-      document.querySelector('#known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
+      document.getElementById('known-user-confirmation').textContent = `Recognized as user #${playerState.visitorID}`;
       // console.log('updating list again to print own data before clicking to lobby');
       // populateUserList();
     } else {
       console.green('KNOWN USER (has adjusted preferences only)');
-      document.querySelector('#enter-lobby-button').disabled = true;
-      document.querySelector('#name-entry-field').placeholder = 'Enter a name';
+      document.getElementById('enter-lobby-button').disabled = true;
+      document.getElementById('name-entry-field').placeholder = 'Enter a name';
     }
   } else {
     console.green('UNKNOWN USER (never adjusted or entered a username)');
-    document.querySelector('#enter-lobby-button').disabled = true;
-    document.querySelector('#name-entry-field').placeholder = 'Enter a name';
+    document.getElementById('enter-lobby-button').disabled = true;
+    document.getElementById('name-entry-field').placeholder = 'Enter a name';
   }
 }
 
@@ -1569,7 +1832,7 @@ function createTitleDie() {
   let titleDie = new Die(5, '#title-screen', 0);
   document.querySelector(`#${titleDie.elementID}`).classList.add('title-die');
   setTimeout(() => {
-    document.querySelector('#title-screen').removeChild(document.querySelector(`#${titleDie.elementID}`));
+    document.getElementById('title-screen').removeChild(document.querySelector(`#${titleDie.elementID}`));
   }, 900);
   return titleDie;
 }
@@ -1646,7 +1909,7 @@ async function playTutorial() {
     tutorialTypeSpeed
   );
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1668,7 +1931,7 @@ async function playTutorial() {
 
   document.querySelector(`#player-area .new-die-box`).classList.remove('highlighted');
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1679,12 +1942,12 @@ async function playTutorial() {
     await pause(400);
   }
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
 
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  document.getElementById('tutorial-top-text-area').innerHTML = '';
   typeSentence(
     '#tutorial-top-text-area',
     'typed-sentence',
@@ -1700,7 +1963,7 @@ async function playTutorial() {
     tutorialTypeSpeed
   );
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1720,7 +1983,7 @@ async function playTutorial() {
   document.querySelector(`#player-area .new-die-box`).classList.add('highlighted');
   
   await pause(500);
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  document.getElementById('tutorial-top-text-area').innerHTML = '';
   await typeSentence(
     '#tutorial-top-text-area',
     'typed-sentence',
@@ -1738,14 +2001,14 @@ async function playTutorial() {
 
   document.querySelector('#player-area .die-lane:nth-child(1)').classList.add('tutorial-highlight');
   
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
   
   await pause(1200);
   
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1757,7 +2020,7 @@ async function playTutorial() {
   let secondFour = await addDieToLane('player', 4, 0, true);
 
   await pause(500);
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  document.getElementById('tutorial-top-text-area').innerHTML = '';
   await typeSentence(
     '#tutorial-top-text-area',
     'typed-sentence',
@@ -1773,29 +2036,29 @@ async function playTutorial() {
     tutorialTypeSpeed
   );
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
 
   await pause(500);
 
-  document.querySelector('#' + firstFour.elementID).classList.add('doubled');
+  document.getElementById('' + firstFour.elementID).classList.add('doubled');
   document.getElementById(secondFour.elementID).classList.add('doubled');
   await pause(userPreferences.animationSpeed);
-  document.querySelector('#' + firstFour.elementID).classList.remove('doubled');
+  document.getElementById('' + firstFour.elementID).classList.remove('doubled');
   document.getElementById(secondFour.elementID).classList.remove('doubled');
   await pause(userPreferences.animationSpeed);
-  document.querySelector('#' + firstFour.elementID).classList.add('doubled');
+  document.getElementById('' + firstFour.elementID).classList.add('doubled');
   document.getElementById(secondFour.elementID).classList.add('doubled');
   await pause(userPreferences.animationSpeed);
-  document.querySelector('#' + firstFour.elementID).classList.remove('doubled');
+  document.getElementById('' + firstFour.elementID).classList.remove('doubled');
   document.getElementById(secondFour.elementID).classList.remove('doubled');
   await pause(userPreferences.animationSpeed);
-  document.querySelector('#' + firstFour.elementID).classList.add('doubled');
+  document.getElementById('' + firstFour.elementID).classList.add('doubled');
   document.getElementById(secondFour.elementID).classList.add('doubled');
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1804,7 +2067,7 @@ async function playTutorial() {
 
   new Die(4, `#player-area .new-die-box`, true);
 
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  document.getElementById('tutorial-top-text-area').innerHTML = '';
   await typeSentence(
     '#tutorial-top-text-area',
     'typed-sentence',
@@ -1820,7 +2083,7 @@ async function playTutorial() {
     tutorialTypeSpeed
   );
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1828,7 +2091,7 @@ async function playTutorial() {
   await pause(500);
 
   let thirdFour = await addDieToLane('player', 4, 0, true);
-  document.querySelector('#' + firstFour.elementID).classList.remove('doubled');
+  document.getElementById('' + firstFour.elementID).classList.remove('doubled');
   document.getElementById(secondFour.elementID).classList.remove('doubled');
   document.getElementById(firstFour.elementID).classList.add('tripled');
   document.getElementById(secondFour.elementID).classList.add('tripled');
@@ -1850,7 +2113,7 @@ async function playTutorial() {
   document.getElementById(secondFour.elementID).classList.add('tripled');
   document.getElementById(thirdFour.elementID).classList.add('tripled');
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1859,7 +2122,7 @@ async function playTutorial() {
 
   let attackingDie = await playDemoTurn('player', 3, 2);
 
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  document.getElementById('tutorial-top-text-area').innerHTML = '';
   await typeSentence(
     '#tutorial-top-text-area',
     'typed-sentence',
@@ -1880,14 +2143,14 @@ async function playTutorial() {
 
   await pause(1200);
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
   
   await pause(1200);
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1896,14 +2159,14 @@ async function playTutorial() {
   document.querySelector('#player-area .die-lane:nth-child(3)').classList.remove('tutorial-highlight');
 
     
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }  
 
   await pause(500);
 
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  document.getElementById('tutorial-top-text-area').innerHTML = '';
   await typeSentence(
     '#tutorial-top-text-area',
     'typed-sentence',
@@ -1923,7 +2186,7 @@ async function playTutorial() {
     tutorialTypeSpeed
   );
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1945,12 +2208,12 @@ async function playTutorial() {
 
   await pause(500);
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
 
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';
+  document.getElementById('tutorial-top-text-area').innerHTML = '';
   typeSentence(
     '#tutorial-top-text-area',
     'typed-sentence',
@@ -1969,7 +2232,7 @@ async function playTutorial() {
     tutorialTypeSpeed
   );
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
@@ -1994,21 +2257,21 @@ async function playTutorial() {
   await playDemoTurn('player', 2, 2);
    document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
 
-  if (!document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (!document.getElementById('tutorial-screen').classList.contains('showing')) {
     console.log('--------------canceled demo!!');
     return;
   }
   
   await pause(500);
 
-  document.querySelector('#opponent-area').classList.add('lost');
-  document.querySelector('#player-area').classList.add('won');
+  document.getElementById('opponent-area').classList.add('lost');
+  document.getElementById('player-area').classList.add('won');
 
   // show 'play again' button?
 }
 
 async function playDemoTurn(contestant, denomination, lane, dealPlayGap=500) {
-  if (document.querySelector('#tutorial-screen').classList.contains('showing')) {
+  if (document.getElementById('tutorial-screen').classList.contains('showing')) {
     new Die(denomination, `#${contestant}-area .new-die-box`, true);
     document.querySelector(`#${contestant}-area .new-die-box`).classList.add('highlighted');
     await pause(dealPlayGap);
@@ -2021,70 +2284,64 @@ async function playDemoTurn(contestant, denomination, lane, dealPlayGap=500) {
   
 }
 
-document.querySelector('#vs-cpu-button').addEventListener('click', async () => {
-  game.singlePlayer = true;
-  resetGame();
-  document.querySelector('#title-screen').classList.add('hidden');
-  document.querySelector('#lobby-screen').style.display = 'none';
-  document.querySelector('#opponent-area').classList.remove('dim');
-  document.querySelector('#header-message').textContent = `CPU Battle (difficulty ${playerState.preferences.CPUDifficulty})`;
-  game.opponent.userName = 'CPU';
-  document.querySelector('#player-name').textContent = playerState.userName;
-  document.querySelector('#opponent-name').textContent = game.opponent.userName;
-  await pause(200);
-  document.querySelector('#title-screen').style.display = 'none';  
-  dealToCPU();
-});
-document.querySelector('#how-to-play-button').addEventListener('click', async () => {
-  document.querySelector('#lobby-screen').style.display = 'none';
-  document.querySelector('#opponent-area').classList.remove('dim');
-  await pause(100);
-  document.querySelector('#game-area').classList.add('demo-mode');
-  document.querySelector('#title-screen').classList.add('hidden');
-  document.querySelector('#header').classList.add('hidden');
-  document.querySelector('#tutorial-screen').classList.add('showing');
-  await pause(500);
-  playTutorial();
-});
-document.querySelector('#tutorial-exit-button').addEventListener('click', async () => {
-  document.querySelector('#tutorial-top-text-area').innerHTML = '';  
-  document.querySelector('#opponent-area').classList.add('dim');
-  document.querySelector('#game-area').classList.remove('demo-mode');
-  document.querySelector('#title-screen').classList.remove('hidden');
-  document.querySelector('#header').classList.remove('hidden');
-  resetGame();
-  document.querySelector('#tutorial-screen').classList.remove('showing');
-  await pause(500);
-  document.querySelector('#lobby-screen').style.display = 'flex';
-});
-document.querySelector('#back-to-title-button').addEventListener('click', async () => {
-  if (playerState.status === 'ready') {
-    lobbyPanel.classList.remove('searching');
-  } else if (playerState.status === 'confirming') {
-    return;
+function printShimmeryLine(string, speed) {
+  let lineElement = document.createElement('div');
+  lineElement.classList.add('line-container');
+  let charArray = string.split('');
+  for (const ind in charArray) {
+    let char = charArray[ind];
+    let charElement = document.createElement('div');
+    charElement.classList.add('square');
+    // if (char === ' ') {
+    //   char = '&nbsp;';
+    // }
+    // charElement.innerHTML = `<p>${char}</p>`;
+    charElement.classList.add('shimmery');
+    let delay = `${ind * speed}ms`;
+    charElement.style.setProperty('animation-delay', delay);
+    lineElement.appendChild(charElement);
   }
-  // playerState.status = 'title';
-  // await handshake({ visitorID: playerState.visitorID, status: playerState.status });
-  document.querySelector('#title-screen').style.display = 'grid';
-  await pause(50);
-  document.querySelector('#title-screen').classList.remove('hidden');
-  await pause(50);
-  document.querySelector('#lobby-screen').classList.add('hidden');
-});
-document.querySelector('#options-button').addEventListener('click', async () => {
-  document.querySelector('#options-screen').classList.add('showing'); 
-});
-document.querySelector('#options-exit-button').addEventListener('click', async () => {
-  document.querySelector('#options-screen').classList.remove('showing');
-});
-document.querySelector('#cpu-difficulty-slider').addEventListener('change', (e) => {
-  let newDifficulty = parseInt(e.target.value);
-  console.log('set new diff', newDifficulty)
-  // if (newDifficulty === 10) {
-  //   document.documentElement.style.setProperty('--opponent-die-color', 'black');
-  //   document.documentElement.style.setProperty('--opponent-die-dot-color', 'black');
-  // }
-  playerState.preferences.CPUDifficulty = newDifficulty;
+  return lineElement;
+}
+async function test() {
+   console.warn('CALLING test');
 
-  storeUserState();
-});
+   let response = await axios({
+     method: 'get',
+     url: 'https://eggborne.com/namegenerator/php/getallrulesets.php',
+     headers: {
+       'Content-type': 'application/x-www-form-urlencoded',
+     },
+   });
+   console.log('GOT test', response.data);
+}
+function getElementPosition(obj) {
+  var curleft = 0,
+    curtop = 0;
+  if (obj.offsetParent) {
+    do {
+      curleft += obj.offsetLeft;
+      curtop += obj.offsetTop;
+    } while ((obj = obj.offsetParent));
+    return { x: curleft, y: curtop };
+  }
+  return undefined;
+}
+
+function getEventLocation(element, event) {
+  let pos = getElementPosition(element);
+  let scrollAmount = document.getElementById('options-body').scrollTop
+  let adjustedPos = {
+    x: event.pageX - pos.x,
+    y: event.pageY - pos.y + scrollAmount,
+  };
+  return adjustedPos;
+}
+
+function rgbToHex(r, g, b) {
+  if (r > 255 || g > 255 || b > 255) throw 'Invalid color component';
+  return ((r << 16) | (g << 8) | b).toString(16);
+}
+
+// let loadLine = printShimmeryLine('..........', 25);
+// document.getElementById('transfer-icon').appendChild(loadLine);

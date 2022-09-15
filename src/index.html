@@ -12,10 +12,10 @@
     <link rel="mask-icon" href="safari-pinned-tab.svg" color="#152815">
     <meta name="msapplication-TileColor" content="#152815">
     <meta name="theme-color" content="#152815">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link
+    <link preconnect rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- <link
       href='https://fonts.googleapis.com/css?family=Montez|Lobster|Josefin+Sans|Shadows+Into+Light|Pacifico|Amatic+SC:700|Orbitron:400,900|Rokkitt|Righteous|Dancing+Script:700|Bangers|Chewy|Sigmar+One|Architects+Daughter|Abril+Fatface|Covered+By+Your+Grace|Kaushan+Script|Gloria+Hallelujah|Satisfy|Lobster+Two:700|Comfortaa:700|Cinzel|Courgette'
-      rel='stylesheet' type='text/css'>
+      rel='stylesheet' type='text/css'> -->
   </head>
   <body style='opacity: 0'>
   <!-- <body> -->
@@ -27,21 +27,22 @@
       </header>
       <div id="confirm-game-modal" class="modal">
         <div id="confirm-header">OPPONENT FOUND!</div>
-        <div id="confirm-message">Connecting players...</div>
+        <div id="confirm-message">Connecting...</div>
+        <div id="confirm-status">Reticulating splines...</div>
         <div id="player-confirm-display">
           <div class="player-confirm-icon-area">
-            <div id="player-confirm-name"></div>
+            <div id="player-confirm-name">FengShui Cocks</div>
             <i class="fa fa-mobile icon"></i>
           </div>
-          <p><i class="fa fa-exchange"></i></p>          
+          <p id="transfer-icon"></i></p>          
           <div class="player-confirm-icon-area">
-            <div id="opponent-confirm-name"></div>
+            <div id="opponent-confirm-name">FengShui Cocks</div>
             <i class="fa fa-mobile icon"></i>
           </div>
           <i id='player-check' class="fa fa-check"></i>
           <i id='opponent-check' class="fa fa-check"></i>
         </div>
-        <button disabled id="confirm-game-button">Start!</button>
+        <button disabled id="confirm-game-button">START MATCH</button>
       </div>
       <div id="options-screen">
         <div id="options-header">Options</div>
@@ -50,7 +51,7 @@
             <div>Full screen</div>
             <div>
               <div id="full-screen-switch" class="switch-groove">
-                <div class="die showing switch-knob">
+                <div class="options die showing switch-knob">
                   <div class='die-dot-grid'>
                     <div class='die-dot'></div>
                     <div class='die-dot'></div>
@@ -72,9 +73,9 @@
               <div class="option-explanation">Visible to opponents in multiplayer matches</div>
             </div>
             <div class="option-row">
-              <div>Player background color</div>
+              <div>Background color</div>
               <div>
-                <input id="bg-color-input" value="#223b3b" class="color-input" type="color" />
+                <input id="bg-color-input" value="#f4f4f4" class="color-input" type="color" />
               </div>
             </div>
             <div class="option-row">
@@ -92,11 +93,11 @@
             <div id="radius-options-area" class="option-row">
               <div>Die roundness</div>
               <div>
-                <input id="die-radius-slider" value="0.12" min=".04" max=".28" step=".01" class="slider" type="range" />
+                <input id="die-radius-slider" value="0.12" min=".04" max=".38" step=".01" class="slider" type="range" />
               </div>
             </div>
-            <div id="demo-die" class="option-row">
-              <div class="die showing">
+            <div id="demo-area" class="option-row">
+              <div class="options die showing">
                 <div class='die-dot-grid'>
                   <div class='die-dot filled'></div>
                   <div class='die-dot'></div>
@@ -109,17 +110,20 @@
                   <div class='die-dot filled'></div>
                 </div>
               </div>              
+              <div id="demo-username" class="option-row">Player</div>
             </div>
-            <div id="username-font-select" class="option-row">
+            <div id="username-font-select-area" class="option-row">
               <div>Username font</div>
               <div>
                 <select id="font-select"></select>
               </div>
             </div>
-            <div id="demo-username" class="option-row">Player</div>
           </div>
           <div class="option-row">
-            <button id="clear-cookies-button" class="title-button">clear local storage</button>
+            <button disabled id="clear-local-storage-button" class="title-button">
+              CLEAR LOCAL STORAGE
+              <p><span id="storage-space-used">0 kb</span> used</p>
+            </button>
           </div>
         </div>
         <div id="options-footer">
@@ -148,6 +152,7 @@
           <div id="known-user-confirmation">&nbsp;</div>
           <div><input autocomplete="off" id="name-entry-field" type="text"></input></div>
           <div><button disabled id="enter-lobby-button" class="title-button">Enter Lobby</button></div>
+          <p id="lobby-report">no players online :(</p>
         </div>
         <div id="vs-cpu-area">
           <button id="vs-cpu-button" class="title-button">VS. CPU</button>
@@ -174,10 +179,11 @@
         <div id="user-list-area">
           <div>Players online</div>
           <div id="user-column-labels">
+            <div></div>
             <div>Name</div>
-            <div>ID</div>
             <div>Status</div>
             <div>Last seen</div>
+            <div></div>
           </div>
           <div id="user-list"></div>
         </div>
@@ -226,9 +232,12 @@
         </div>
       </div>
       <footer id="footer">
-
+        <button class="title-button" id="cpu-game-back-button">Quit</button>
       </footer>
     </main>
     <div id='debug'></div>      
   </body>
+  <link
+    href='https://fonts.googleapis.com/css?family=Montez|Lobster|Josefin+Sans|Shadows+Into+Light|Pacifico|Amatic+SC:700|Orbitron:400,900|Rokkitt|Righteous|Dancing+Script:700|Bangers|Chewy|Sigmar+One|Architects+Daughter|Abril+Fatface|Covered+By+Your+Grace|Kaushan+Script|Gloria+Hallelujah|Satisfy|Lobster+Two:700|Comfortaa:700|Cinzel|Courgette'
+    rel='stylesheet' type='text/css'>
 </html>
