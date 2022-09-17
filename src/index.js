@@ -39,25 +39,101 @@ window.onresize = async () => {
   }
 };
 
-const fonts = ["sans-serif","Montez","Lobster","Josefin Sans","Shadows Into Light","Pacifico","Amatic SC", "Orbitron", "Rokkitt","Righteous","Dancing Script","Bangers","Chewy","Sigmar One","Architects Daughter","Abril Fatface","Covered By Your Grace","Kaushan Script","Gloria Hallelujah","Satisfy","Lobster Two","Comfortaa","Cinzel","Courgette"];
+// let fonts = [
+//   'Montez',
+//   'Knewave',
+//   'Lobster',
+//   'Ceviche One',
+//   'Pacifico',
+//   'Righteous',
+//   'Chewy',
+//   'Sigmar One',
+//   'Shojumaru',
+//   'Kaushan Script',
+//   'Gloria Hallelujah',
+//   'Comfortaa',
+//   'Cinzel',
+//   'Courgette',
+//   'Paytone One',
+//   'Permanent Marker',
+//   'Berkshire Swash',
+//   'Skranji',
+//   'Fredoka One',
+//   'Great Vibes',
+//   'Pangolin',
+//   'Merienda',
+//   'Lilita One',  
+// ];
+let fonts = [
+  'Beau Rivage',
+  'Bebas Neue',
+  'Berkshire Swash',
+  'Bowlby One SC',
+  'Carter One',
+  'Creepster',
+  'DynaPuff',
+  'Fredoka One',
+  'Gluten',
+  'Great Vibes',
+  'Henny Penny',
+  'Luckiest Guy',
+  'Mr Dafoe',
+  'Neucha',
+  'Oleo Script',
+  'Permanent Marker',
+  'Rancho',
+  'Righteous',
+  'Rubik Moonrocks',
+  'Satisfy',
+  'Sigmar One',
+  'Special Elite',
+  'Spicy Rice',
+  'VT323',
+];
+fonts = fonts.sort();
+fonts.unshift('sans-serif');
+
+// let fontString = '';
+// for (let i in fonts) {
+//   let arr = fonts[i].split(' ');
+//   for (let p in arr) {
+//     fontString += arr[p];
+//     if (arr.length > 1 && p < arr.length - 1) {
+//       fontString += '+';
+//     }
+//   }
+//   if (i < fonts.length - 1) {
+//     fontString += '|';
+//   }
+// }
+// console.log('made font string', fontString);
 
 window.onload = async () => {
   console.error('>>>>>>>>>>>>>>>>>>> ONLOAD >>>>>>>>>>>>>>>>>>>>>')
   detectScreen();
   assignHandlers();  
   document.body.style.opacity = '1';
-  animateTitle();
   await populateUserList(true);
+  animateTitle();
   console.error('finished populate')
   updateLobbyCount();
   console.error('finished lobbycount')
   await printLobbyMessages(10);
+
+  // for (let i in fonts) {
+  //   let letterTest = document.createElement('p');
+  //   letterTest.classList.add('letter-test');
+  //   letterTest.style.fontFamily = fonts[i];
+  //   letterTest.textContent = 'R';
+  //   document.getElementById('test-area').appendChild(letterTest);
+  // }
   
   document.getElementById('lobby-chat-window').style.setProperty('scroll-behavior', 'smooth');
   startPolling();
+
   let selectedFont = playerState.preferences.customizations['--player-username-font'];
   var fontSelect = document.getElementById('font-select');
-  for (var a = 0; a < fonts.length; a++) {
+  for (var a = 0; a < fonts.length - 1; a++) {
     var opt = document.createElement('option');
     opt.value = opt.innerHTML = fonts[a];
     opt.style.fontFamily = fonts[a];
@@ -79,9 +155,9 @@ async function animateTitle() {
 }
 
 // don't show full screen button if user can't or already is from PWA
-if (!fscreen.fullscreenEnabled || fscreen.fullscreenElement !== null) {
-  document.getElementById('full-screen-button').style.display = 'none';
-};
+// if (!fscreen.fullscreenEnabled || fscreen.fullscreenElement !== null) {
+//   document.getElementById('full-screen-button').style.display = 'none';
+// };
 
 const initialHeight = window.innerHeight;
 
@@ -98,21 +174,21 @@ const game = {
     userName: undefined,
     visitorID: undefined,
     atBat: undefined,
-    lanes: [[], [], []],
     laneElements: [[], [], []],
     totalScore: 0,
   },
   player: {
     userName: 'Player',
     atBat: undefined,
-    lanes: [[], [], []],
     laneElements: [[], [], []],
     totalScore: 0,
   },
   currentTurn: undefined,
+  nextDie: undefined,
   gameID: undefined,
   deals: 0,
   singlePlayer: false,
+  started: false
 };
 
 let palleteMarkerPositions = {
@@ -129,6 +205,7 @@ let playerState = {
   lastMessageSeen: 0,
   initiator: false,
   latency: 0,
+  currentGameID: undefined,
   preferences: {
     animationSpeed: 200,
     CPUTurnSpeed: 500,
@@ -168,26 +245,25 @@ assimilateKnownUser();
 function assignHandlers() {
   console.error('>>>>>>>>>>> assignHandlers <<<<<<<<<<<<<');
   document.querySelector('#player-area .die-lane:nth-child(1)').addEventListener('pointerdown', () => {
-    if (Date.now() - clickTimes.lane > 500) {
+    if (game.player.atBat && Date.now() - clickTimes.lane > 500) {
       addDieToLane('player', game.player.atBat, 0);
       clickTimes.lane = Date.now();
     }
   });
   document.querySelector('#player-area .die-lane:nth-child(2)').addEventListener('pointerdown', () => {
-    if (Date.now() - clickTimes.lane > 500) {
+    if (game.player.atBat && Date.now() - clickTimes.lane > 500) {
       addDieToLane('player', game.player.atBat, 1);
       clickTimes.lane = Date.now();
     }
   });
   document.querySelector('#player-area .die-lane:nth-child(3)').addEventListener('pointerdown', () => {
-    if (Date.now() - clickTimes.lane > 500) {
+    if (game.player.atBat && Date.now() - clickTimes.lane > 500) {
       addDieToLane('player', game.player.atBat, 2);
       clickTimes.lane = Date.now();
     }querySelector
   });
 
   document.getElementById('chat-submit-button').addEventListener('click', async (e) => {
-    console.log('hit the button!', Date.now());
     let message = convertToPlain(document.getElementById('lobby-chat-field').value.trim());
     document.getElementById('lobby-chat-field').value = '';
     if (message) {
@@ -230,6 +306,7 @@ function assignHandlers() {
         playerState.initiator = true;
         callConfirmModal(newOpponent);      
       } else {
+        playerState.initiator = false;
         lobbyPanel.classList.add('searching');
         // await handshake({ visitorID: playerState.visitorID, status: playerState.status });
         await reportNewStatus('ready');
@@ -346,14 +423,13 @@ function assignHandlers() {
     dealToCPU();
   });
   document.getElementById('cpu-game-back-button').addEventListener('click', async () => {
-    // document.getElementById('title-screen').style.display = 'grid';
+    game.singlePlayer = false;
     document.getElementById('title-screen').classList.remove('hidden');
-    document.getElementById('opponent-area').classList.remove('dim');
     document.getElementById('player-area').classList.remove('dim');
     await pause(200);
     document.getElementById('lobby-screen').style.display = 'flex';
-    playerState.singlePlayer = false;
     resetGame();
+    document.getElementById('opponent-area').classList.add('dim');
   });
   document.getElementById('how-to-play-button').addEventListener('click', async () => {
     document.getElementById('lobby-screen').style.display = 'none';
@@ -422,9 +498,12 @@ function assignHandlers() {
 
 }
 
-async function reportNewStatus(newStatus) {
+async function reportNewStatus(newStatus, creatingGame) {
   playerState.previousStatus = playerState.status;
   playerState.status = newStatus;
+  if (creatingGame) {
+    await handshake({ status: playerState.status, visitorID: playerState.visitorID });
+  }
   await handshake({ status: playerState.status, visitorID: playerState.visitorID });
 }
 
@@ -530,11 +609,10 @@ async function populateUserList(initial) {
 function drawPingBars(query, ping) {
   let pingBars = document.querySelector(query);
   let barsShowing = 6;
-  let amountOver = ping - 125;
+  let amountOver = ping - 150;
   if (amountOver < 0) amountOver = 0;
-  barsShowing -= Math.round(amountOver / 24);
-  if (barsShowing < 0) barsShowing = 0;
-  console.log('fucker gets', barsShowing, 'bars for ping', ping);
+  barsShowing -= Math.round(amountOver / 32);
+  if (barsShowing <= 0) barsShowing = 1;
   let barArray = [...pingBars.children];
   for (let i = 0; i < barArray.length; i++) {
     if (i >= barsShowing) {
@@ -588,7 +666,7 @@ const userPreferences = {
 }
 
 // const pollInterval = 1500;
-const pollInterval = 900;
+const pollInterval = 1000;
 
 async function performInitialHandshake(nameEntered) {  
   const firstShakeData = {
@@ -610,11 +688,11 @@ let pollLoop;
 let confirmWaitTime = 0;
 
 function startPolling() {
-  // let lastPoll = 0;  
+  // let lastPoll = 0;
   pollLoop = setInterval(async () => {
     if (playerState.status === 'title') {
       if ((Date.now() - queryTimes.users) > 3000) {
-        console.log('only querying lobby users due to title screen (uncomment below to actually do it!)');
+        console.log('only querying lobby users due to title screen or vs cpu');
         await populateUserList();
         updateLobbyCount();
       } else {
@@ -635,42 +713,41 @@ function startPolling() {
       if (waitingForConfirm) {
         // console.green('ALREADY FOUND READY OPPONENT');
         confirmWaitTime += pollInterval;
-        if (!playerState.initiator) {
+        if (!playerState.initiator) { // respondant
           if (playerState.status !== 'confirming') {
-            console.green('I am RESPONDANT polling findGameWithIDs for the one INITIATOR just created with our IDs!');
-            let newGame = await findGameWithIDs([game.opponent.visitorID, playerState.visitorID]);
+            let newGame;
+            let opponentState = await checkUserStatus(game.opponent.visitorID);
+            if (opponentState.gameID) {
+              newGame = await getGameData(opponentState.gameID);
+            }
             if (newGame) {
-              console.log('RESPONDANT found a game', newGame);
-              console.log('game obj was', game);
               game.gameID = newGame.gameID;
               game.player.userName = playerState.userName;
               game.firstPlayer = newGame.playerTurn;
-              game.atBat = parseInt(newGame.atBat);
+              game.nextDie = parseInt(newGame.atBat);
               game.currentTurn = newGame.playerTurn;
               await reportNewStatus('confirming');
-              // playerState.status = 'confirming';
-              // await handshake([playerState.visitorID, playerState.status]);
               document.getElementById('opponent-check').classList.add('checked');
               await pause(500);
               document.getElementById('player-check').classList.add('checked');
               document.getElementById('confirm-message').textContent = 'CONNECTED!';
               document.getElementById('confirm-game-button').disabled = false;
             } else {
-              console.log('checked but did not find a newly-created game with both players');
+              console.log('checked but did not find a valid gameID in opponent data');
             }
           } else {
-            console.green('button enabled now.');
+            // button enabled, waiting for click
           }            
         } else { // initiator
-          console.log('i am INITIATOR, checking if opponent status is confirming --------->');
-          let opponentStatus = await checkUserStatus(game.opponent.visitorID);
+          let opponentState = await checkUserStatus(game.opponent.visitorID);
+          let opponentStatus = opponentState.status;
+          console.log('fufu INIT opponentStatus', opponentStatus);
           if (opponentStatus === 'confirming') {
             document.getElementById('opponent-check').classList.add('checked');
             await pause(500);
             document.getElementById('player-check').classList.add('checked');
             document.getElementById('confirm-message').textContent = 'CONNECTED!';
             document.getElementById('confirm-game-button').disabled = false;
-            // playerState.status = 'confirming';
             await reportNewStatus('confirming');
           } else {
             console.log('checked, but opponent status is still', opponentStatus, ', not confirming');
@@ -680,6 +757,7 @@ function startPolling() {
       } else { // confirm modal not showing (waiting in lobby)
         if (now - queryTimes.users >= (pollInterval / 1.5)) {
           if (playerState.status === 'ready') {
+            console.log('poll calling getReadyUsers because player status = ready')
             let readyUserList = await getReadyUsers(); // check for ready users before updating HTML list            
             readyUserList = readyUserList.filter((userRow) => {
               return parseInt(userRow.visitorID) !== playerState.visitorID;
@@ -691,14 +769,16 @@ function startPolling() {
               await handshake({ visitorID: playerState.visitorID, status: playerState.status });
               callConfirmModal(newOpponent);
             } else {
+              console.log('poll calling populateUserList after not finding ready users')
               populateUserList(); // only update HTML if ready user not found
             }
           } else {
+            console.log('poll calling populateUserList')
             populateUserList();
             await pause(200);
           }          
         } else {
-          console.error('throttled populateUserList', (now - queryTimes.users));
+          console.error('throttled getReadyUsers/populateUserList', (now - queryTimes.users));
         }        
         if (now - queryTimes.lobbyMessages >= (pollInterval / 1.5)) {
           console.log('poll calling printlobbymessages')
@@ -711,42 +791,51 @@ function startPolling() {
         status: playerState.status,
         visitorID: playerState.visitorID,
       };
+      console.log('poll handshaking while READY or LOBBY')
       handshake(updateShake);
     } else if (playerState.status.indexOf('playing' !== -1)) { // player has flipped coin
       if (!game.started) { // opponent has not yet flipped
-        let opponentStatus = await checkUserStatus(game.opponent.visitorID);
+        let opponentState = await checkUserStatus(game.opponent.visitorID);
+        let opponentStatus = opponentState.status;
+        console.log('first flipper', playerState.userName, 'checking status of', game.opponent.userName, opponentStatus)
         if (opponentStatus.indexOf('playing') !== -1) { // opponent has flipped
           game.started = true;
           document.getElementById('opponent-area').classList.remove('dim');
-          console.green('--------- GAME START! ---------------------------')
+          console.green('--------- GAME START! ------------')
         }
       } else { // both have flipped and the game has started
+        console.warn('fufu BOTH FLIPPED!');
+        console.log('fufu game', { ...game });
+        console.log('fufu playerState', playerState);
         let currentGameData = await getGameData(game.gameID);
         if (!game.deals) { // first turn
+          console.log('fufu FIRST TURN! --------------------------------------------------------------------')
+          console.log('fufu game', { ...game });
+          console.log('fufu playerState', playerState);
           if (!game.player.atBat && playerState.visitorID == game.firstPlayer) {     
-            console.log('DEALING a', game.atBat, 'to player on first turn');
-            dealDie('player', game.atBat);
+            console.log('fufu DEALING a', game.nextDie, 'to player on first turn');
+            dealDie('player', game.nextDie);
           } else if (!game.opponent.atBat) {
-            console.log('DEALING a', game.atBat, 'to opponent on first turn');
-            dealDie('opponent', game.atBat);
-          }          
+            console.log('fufu DEALING a', game.nextDie, 'to opponent on first turn');
+            dealDie('opponent', game.nextDie);
+          } else {
+            console.error('fufu NO DEAL ON FIRST TURN')
+          }        
         } else {
           // 2nd turn onward
-          console.log('new data', currentGameData)
-          console.log('game.player.atBat', game.player.atBat);
-          console.log('currentGameData.currentTurn', currentGameData.playerTurn);
           let convertedLane = parseInt(currentGameData.lastMove);
-          console.log('orig lane', convertedLane);
           if (convertedLane == 0) {
             convertedLane = 2;
           } else if (convertedLane == 2) {
             convertedLane = 0;
           }
-          console.log('conv lane', convertedLane);
           if (game.opponent.atBat && !game.player.atBat && currentGameData.playerTurn == playerState.visitorID) {
             await addDieToLane('opponent', game.opponent.atBat, convertedLane);
-            // sendMove()
             dealDie('player', parseInt(currentGameData.atBat));
+          } else {
+            console.error('fufu no deal!')
+            console.error('fufu game', {...game})
+            console.error('fufu curerntGameData', currentGameData)
           }
         }
       }
@@ -754,6 +843,7 @@ function startPolling() {
         status: playerState.status,
         visitorID: playerState.visitorID,
       };
+      console.log('poll handshaking while status PLAYING', playerState)
       handshake(updateShake);
     }
   }, pollInterval);
@@ -855,8 +945,8 @@ async function callConfirmModal(opponent) {
       game.secondPlayer = firstTurnID;
     }
     game.currentTurn = game.firstPlayer;
-    game.atBat = parseInt(newGame[2]);
-
+    game.nextDie = parseInt(newGame[2]);
+    playerState.currentGameID = game.gameID;
     console.log('now local game obj is', game);
     document.getElementById('player-check').classList.add('checked');
   } else {
@@ -872,39 +962,6 @@ async function dismissConfirmModal() {
   document.getElementById('confirm-message').textContent = 'Connecting players...';
   document.getElementById('opponent-check').classList.remove('checked');
   document.getElementById('player-check').classList.remove('checked');
-}
-  
-
-export async function introduceToLobby() {
-  game.player.userName = playerState.userName;
-  game.singlePlayer = false;
-  if (knownUser) {
-    if (playerState.visitorID) { // in DB already
-      console.warn('in DB already: normal handshake')
-      await handshake({ visitorID: playerState.visitorID, status: playerState.status });
-    } else { // has changed prefs but not entered a name
-      console.warn('beginHandshake known but no ID: performInitialHandshake');
-      await performInitialHandshake(playerState.userName);
-    }
-  } else { // nothing was in local storage
-    console.warn('beginHandshake !knownUser: performInitialHandshake');
-    await performInitialHandshake(playerState.userName);
-  }  
-}
-export async function beginHandshake() {
-  game.player.userName = playerState.userName;
-  if (knownUser) {
-    if (playerState.visitorID) { // in DB already
-      console.warn('in DB already: normal handshake')
-      await handshake({ visitorID: playerState.visitorID, status: playerState.status });
-    } else { // has changed prefs but not entered a name
-      console.warn('beginHandshake known but no ID: performInitialHandshake');
-      await performInitialHandshake(playerState.userName);
-    }
-  } else { // nothing was in local storage
-    console.warn('beginHandshake !knownUser: performInitialHandshake');
-    await performInitialHandshake(playerState.userName);
-  }
 }
 
 function validateName(e) {
@@ -1093,8 +1150,7 @@ async function destroyDie(query, crosscheck) {
 
 
 async function dealDie(contestant, denomination) {
-  console.green('dealDie DEALING a', denomination, 'to', contestant);
-  console.log('dealDie DEALING a', denomination, 'to', contestant);
+  console.log('fufu dealDie DEALING a', denomination, 'to', contestant);
   new Die(denomination, `#${contestant}-area .new-die-box`);
   game[contestant].atBat = denomination;
   let availableLanes = [...document.querySelectorAll(`#${contestant}-area .die-lane`)].filter((lane) => [...lane.children].length < 3);
@@ -1107,18 +1163,22 @@ async function dealDie(contestant, denomination) {
       await pause(150);
   }
   game.deals++;
+  console.log('fufu game.deals now', game.deals)
 }
 
 const totalDiceInPlay = (contestant) =>
   [...game[contestant].laneElements[0], ...game[contestant].laneElements[1], ...game[contestant].laneElements[2]].length;
 
 async function addDieToLane(contestant, denomination, lane, demo) {
-  console.warn(contestant, 'ADDING DEALING a', denomination, 'to', contestant, 'lane', lane);
-  if (demo && !document.getElementById('tutorial-screen').classList.contains('showing')) {
-    console.log('cancelled addDieToLane due to tutorial closed');
+  if (denomination === undefined) {
+    console.log('cancelled addDieToLane due to undefined denomination');
     return;
   }
-  game[contestant].lanes[lane].push(denomination); // get rid of game[contestant].lanes
+  if (demo && !document.getElementById('tutorial-screen').classList.contains('showing')) {
+    console.log('cancelled addDieToLane due to demo=true when tutorial not showing');
+    return;
+  }
+  console.warn(contestant, 'ADDING DEALING a', denomination, 'to', contestant, 'lane', lane);
   let chosenLane = lane + 1;
   const newDie = new Die(denomination, `#${contestant}-area .die-lane:nth-child(${chosenLane})`, lane);
   game[contestant].laneElements[lane].push(newDie);
@@ -1158,6 +1218,7 @@ async function addDieToLane(contestant, denomination, lane, demo) {
         if (!game.singlePlayer) {
           sendMove(lane);
         } else {
+          console.log('deal to cpu')
           dealToCPU();
         }
       }
@@ -1315,6 +1376,13 @@ function colorMatchingDice(contestant) {
 function resetGame() {
   game.player.laneElements = [[], [], []];
   game.opponent.laneElements = [[], [], []];
+  game.deals = 0;
+  game.player.atBat = undefined;
+  game.opponent.atBat = undefined;
+  game.player.totalScore = 0;
+  game.opponent.totalScore = 0;
+  game.started = false;
+  game.nextDie = undefined;
   [...document.querySelectorAll(`.die:not(.options):not(.user-list)`)].forEach((die) => {
     die.parentNode.removeChild(die);
   });
@@ -1323,14 +1391,13 @@ function resetGame() {
   });
   [...document.querySelectorAll(`.die-lane`)].forEach((lane) => {
     lane.classList.remove('available');    
+    lane.classList.remove('highlighted');    
   });
-  document.querySelector(`#player-area .new-die-box`).innerHTML = '';
-  document.querySelector(`#opponent-area .new-die-box`).innerHTML = '';
   updateContestantScore('player');
   updateContestantScore('opponent');
-  console.warn('after reset, .die arr is', [...document.querySelectorAll(`.die`)]);
-  console.warn('after reset, game is', game);
-  console.log(playerState)
+  document.querySelector(`#player-area .new-die-box`).innerHTML = '';
+  document.querySelector(`#opponent-area .new-die-box`).innerHTML = '';
+  console.log('fufu reset game?', { ...game });
 }
 
 // document.body.addEventListener('fullscreenchange', async (e) => {
@@ -1408,9 +1475,6 @@ function storeUserState() {
   if (document.getElementById('clear-local-storage-button').disabled) {
     document.getElementById('clear-local-storage-button').disabled = false;
   }
-  
-
-  console.log('size is', window.localStorage[localStorageName].length)
 }
 function loadUserState(rawData) {
   let newState = JSON.parse(rawData);
@@ -1463,7 +1527,6 @@ function convertToPlain(html) {
 
 async function printLobbyMessages(forceHistory) {
   let messagesArray = await getLobbyMessages(forceHistory);
-  console.log('printlobb got messages', messagesArray)
   if (messagesArray.length === 0) {
     return;
   }
@@ -1502,8 +1565,6 @@ async function printLobbyMessages(forceHistory) {
 }
 
 async function getOpponentCustomizations(opponentID) {
-  console.log('querying for prefs of', opponentID)
-  console.log(opponentID)
   let response = await axios({
     method: 'post',
     url: 'https://mikedonovan.dev/kbones/php/getopponentcustomizations.php',
@@ -1514,7 +1575,6 @@ async function getOpponentCustomizations(opponentID) {
       visitorID: parseInt(opponentID),
     },
   });
-  console.log('raw is', response)
   const preferences = JSON.parse(response.data.preferences);
   return preferences;
   // game.opponent.preferences = preferences;
@@ -1553,6 +1613,7 @@ async function checkUserStatus(visitorID) {
     },
     data: visitorID,
   });
+  console.log('fufu check', response.data)
   let userStatus = response.data;
   return userStatus;
 }
@@ -1566,11 +1627,9 @@ async function findGameWithIDs(visitorIDs) {
     data: JSON.stringify(visitorIDs),
   });
   let gamesArray = response.data;
-  console.log('raw', gamesArray)
   gamesArray.forEach((gameRow, g) => {
     gamesArray[g] = JSON.parse(gameRow);
   })
-  console.log('parsed', gamesArray)
   return gamesArray[0];
 }
 async function createGame(visitorIDs) {
@@ -1584,34 +1643,7 @@ async function createGame(visitorIDs) {
   });
   return response.data;
 }
-async function getInitialGameDie() {
-  console.warn('CALLING getInitialGameDie');
-  let calledAt = Date.now();
-  queryTimes.users = calledAt;
-  let response = await axios({
-    method: 'get',
-    url: 'https://mikedonovan.dev/kbones/php/getinitialdie.php',
-    headers: {
-      'Content-type': 'application/x-www-form-urlencoded',
-    },
-  });
-  return response.data
-}
-async function getRandomFlipFromDatabase() {
-  console.warn('CALLING getRandomFlipFromDatabase');
-  let calledAt = Date.now();
-  queryTimes.users = calledAt;
-  let response = await axios({
-    method: 'get',
-    url: 'https://mikedonovan.dev/kbones/php/getrandomflip.php',
-    headers: {
-      'Content-type': 'application/x-www-form-urlencoded',
-    },
-  });
-  console.log('GOT RAND', response.data)
-}
 async function getUsersFromDatabase(initial) {
-  console.warn('CALLING getUsersFromDatabase');
   let response = await axios({
     method: 'get',
     url: 'https://mikedonovan.dev/kbones/php/getusers.php',
@@ -1619,7 +1651,6 @@ async function getUsersFromDatabase(initial) {
       'Content-type': 'application/x-www-form-urlencoded',
     }
   });
-  console.log('getUsers got', response.data)
   queryTimes.users = Date.now();  
   const usersArray = [...response.data];
   usersArray.forEach((row, i, self) => {
@@ -1629,11 +1660,9 @@ async function getUsersFromDatabase(initial) {
   if (initial) {
     // document.getElementById('enter-lobby-button').disabled = false;
   }
-  console.log('getUsers parsed', usersArray)
   return usersArray;
 }
 async function getReadyUsers() {
-  console.warn('CALLING getReadyUsers');
   queryTimes.users = Date.now();
   let response = await axios({
     method: 'get',
@@ -1664,7 +1693,6 @@ async function getLobbyMessages(forceHistory=0) {
   messagesArray.forEach((row, i, self) => {
     self[i] = JSON.parse(row);
   });
-  console.log(messagesArray)
   return messagesArray.reverse();
 }
 async function sendLobbyMessage(message) {
@@ -1674,7 +1702,6 @@ async function sendLobbyMessage(message) {
     visitorID: playerState.visitorID,
     message: message
   }
-  console.log('sending lobby message', messageData)
   messageData = JSON.stringify(messageData);
   let response = await axios({
      method: 'post',
@@ -1684,14 +1711,12 @@ async function sendLobbyMessage(message) {
     },
     data: messageData
   });
-  // await printLobbyMessages();
-  console.log(response);
   return response;
 }
 
 async function sendPreferences(preferences) {
   if (!playerState.visitorID) {
-    console.log('no visitorID associated');
+    console.error('no visitorID associated');
     return;
   }
   const response = await axios({
@@ -1719,13 +1744,11 @@ async function changeUserName(newName) {
       newName: newName
     }),
   });
-  console.log('changed name?', response.data);
   document.getElementById('user-list').innerHTML = '';  
   document.getElementById('demo-username').textContent = newName;
 }
 async function handshake(shakeData) {
   shakeData.latency = playerState.latency;
-  console.warn('shaking with', shakeData);
   queryTimes.handshake = Date.now();
   let startedShake = Date.now();
   const shakeResult = await axios({
@@ -1738,13 +1761,16 @@ async function handshake(shakeData) {
   });
   let shakeTime = Date.now() - startedShake;
   document.getElementById('debug').innerHTML = 'ping: ' + shakeTime;
-  console.warn('got shakeResult', shakeResult.data + ' in ' + shakeTime);
   playerState.latency = shakeTime;
   return shakeResult.data
 }
 
 document.getElementById('enter-lobby-button').addEventListener('click', async () => {
-  console.log('playerstate when enter lobby clicked:', playerState)
+  await pause(200);
+  resetGame();
+  document.getElementById('opponent-area').classList.add('dim');
+  console.log('playerstate when enter lobby clicked:', {...playerState})
+  console.log('game when enter lobby clicked:', {...game})
   let nameEntered = document.getElementById('name-entry-field').value;
   nameEntered = convertToPlain(document.getElementById('name-entry-field').value);
   if (nameEntered.trim().length < 2 || nameEntered.trim().length > 18) {
@@ -1777,15 +1803,12 @@ document.getElementById('enter-lobby-button').addEventListener('click', async ()
     playerState.status = 'lobby';
     await performInitialHandshake(playerState.userName);
   }
-  
-
   document.getElementById('cpu-game-back-button').style.display = 'none';
   document.getElementById('lobby-screen').classList.remove('hidden');
   await pause(100);
   document.getElementById('title-screen').classList.add('hidden');
   await pause(100);
   document.getElementById('title-screen').style.display = 'none';
-  console.log('finished func')
 });
 document.getElementById('name-entry-field').addEventListener('input', (e) => {
   let trimmed = e.target.value.trim(); 
@@ -1799,9 +1822,6 @@ document.getElementById('name-entry-field').addEventListener('input', (e) => {
   }
   // e.target.value = e.target.value.trim();
 });
-
-// let knownUser = window.localStorage.getItem(localStorageName);
-// assimilateKnownUser();
 
 async function assimilateKnownUser() {
   if (knownUser) {
@@ -1881,7 +1901,9 @@ async function makeCPUMove() {
   });
   let chosenLane = availableLanes[randomInt(0, availableLanes.length - 1)];
   await addDieToLane('opponent', game.opponent.atBat, chosenLane);
-  dealDie('player', randomInt(1, 6));
+  if (totalDiceInPlay('opponent') < 9) {
+    dealDie('player', randomInt(1, 6));
+  } 
 }
 
 let tutorialTypeSpeed = 40;
