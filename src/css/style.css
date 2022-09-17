@@ -61,6 +61,9 @@ table {
 	--border-width: calc(var(--die-size) / 24);
 	--button-height: calc(var(--header-height) * 1.5);
 	--main-font: sans-serif;
+	/* --cube-face-size: calc(var(--play-area-width) * 0.5); */
+	--cube-face-size: 50vw;
+	--cube-x-offset: 0;
 
 	--default-die-color: #cbcbcb;
 	
@@ -199,6 +202,16 @@ main > * {
 .turn-area.won, .turn-area.lost {
 	/* filter: blur(var(--border-width)); */
 	pointer-events: none;
+}
+.turn-area.won .contestant-score {
+	/* filter: blur(var(--border-width)); */
+	animation-duration: 500ms;
+  animation-name: bounce;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+.turn-area.lost .contestant-score {
+	color: rgba(255, 147, 165, 0.667);
 }
 
 #opponent-area {
@@ -1725,4 +1738,71 @@ footer {
 	color: #ddd;
 	font-size: 30px;
 	margin-right: 10px;
+}
+
+#title-cube.cube {
+  position: absolute;
+  width: var(--cube-face-size);
+  height: var(--cube-face-size);
+  transform-style: preserve-3d;
+  animation: turn 5s linear infinite;
+	z-index: -1;
+}
+
+.face {
+	/* opacity: 0.5; */
+  position: absolute;
+  width: inherit;
+  height: inherit;
+	backface-visibility: hidden;
+}
+.face > .die {
+	width: inherit;
+	height: inherit;
+	border-radius: 0 !important;
+	transition: unset !important;
+}
+.face .die::before, .face .die::after {
+	display: none;
+}
+
+.front {
+  transform: translateZ(calc(var(--cube-face-size) / 2));
+}
+
+.back {
+  transform: translateZ(calc(var(--cube-face-size) / -2)) rotateY(180deg);
+}
+
+.left {
+  transform: translateX(calc(var(--cube-face-size) / -2)) rotateY(-90deg);
+}
+
+.right {
+  transform: translateX(calc(var(--cube-face-size) / 2)) rotateY(90deg);
+}
+
+.top {
+  transform: translateY(calc(var(--cube-face-size) / -2)) rotateX(90deg);
+}
+
+.bottom {
+  transform: translateY(calc(var(--cube-face-size) / 2)) rotateX(-90deg);
+}
+
+@keyframes turn {
+	0% {
+		transform: scale(1) rotate3d(0, 0, 0, 0) rotate(0deg);
+		
+	}
+
+	50% {
+		transform: scale(0.8) rotate3d(0.5, 0.5, 0, 180deg) rotate(180deg);
+		
+	}
+
+	100% {
+		transform: scale(1) rotate3d(1, 1, 0, 360deg) rotate(360deg);
+		
+	}
 }

@@ -108,18 +108,32 @@ fonts.unshift('sans-serif');
 // }
 // console.log('made font string', fontString);
 
+function renderTitleCube() {
+  let randomTitleDie = randomInt(1, 6);
+  new Die(randomTitleDie, `#title-cube .top`, undefined, false, true);
+  new Die(randomTitleDie, `#title-cube .bottom`, undefined, false, true);
+  new Die(randomTitleDie, `#title-cube .left`, undefined, false, true);
+  new Die(randomTitleDie, `#title-cube .right`, undefined, false, true);
+  new Die(randomTitleDie, `#title-cube .front`, undefined, false, true);
+  new Die(randomTitleDie, `#title-cube .back`, undefined, false, true);
+  setTimeout(() => {
+    document.getElementById('title-cube').style.scale = '1';
+  }, 2000)
+}
+
 window.onload = async () => {
   console.error('>>>>>>>>>>>>>>>>>>> ONLOAD >>>>>>>>>>>>>>>>>>>>>')
   detectScreen();
   assignHandlers();  
   document.body.style.opacity = '1';
   await populateUserList(true);
+  renderTitleCube()
   animateTitle();
   console.error('finished populate')
   updateLobbyCount();
   console.error('finished lobbycount')
   await printLobbyMessages(10);
-
+  
   // for (let i in fonts) {
   //   let letterTest = document.createElement('p');
   //   letterTest.classList.add('letter-test');
@@ -993,121 +1007,44 @@ function produceDieHTML(denomination, id, dieClass) {
   return dieElement;
 }
 
+const dieDotPatterns = [
+  [4],
+  [2, 6],
+  [2, 4, 6],  
+  [0, 2, 6, 8],
+  [0, 2, 4, 6, 8],
+  [0, 2, 3, 5, 6, 8],
+]
+
 class Die {
-  constructor(denomination, targetDivQuery, lane, demo) {
+  constructor(denomination, targetDivQuery, lane, demo, cube) {
     if (demo && !document.getElementById('tutorial-screen').classList.contains('showing')) {
       console.green('cancelled die creation because tutorial not showing');
     }
     this.denomination = denomination;
     this.lane = lane;
     this.elementID = 'die-' + currentDieID;
-    let dieDotsHTML;
-    switch (denomination) {
-      case 1:
-        dieDotsHTML = `
-          <div class='die-dot-grid'>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-          </div>
-        `;
-        break;
-      case 2:
-        dieDotsHTML = `
-          <div class='die-dot-grid'>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-          </div>
-        `;
-        break;
-      case 3:
-        dieDotsHTML = `
-          <div class='die-dot-grid'>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-          </div>
-        `;
-        break;
-      case 4:
-        dieDotsHTML = `
-          <div class='die-dot-grid'>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-          </div>
-        `;
-        break;
-      case 5:
-        dieDotsHTML = `
-          <div class='die-dot-grid'>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-          </div>
-        `;
-        break;
-      case 6:
-        dieDotsHTML = `
-          <div class='die-dot-grid'>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot filled'></div>
-            <div class='die-dot'></div>
-            <div class='die-dot filled'></div>
-          </div>
-        `;
-        break;
+    let dieDots = document.createElement('div');
+    dieDots.classList.add('die-dot-grid');
+    let dieDotsHTML = '';
+    const dotPattern = dieDotPatterns[denomination - 1];
+    for (let i = 0; i < 9; i++) {
+      let dotClass = `die-dot${dotPattern.indexOf(i) !== -1 ? ' filled' : ''}`
+      dieDotsHTML += `<div class='${dotClass}'></div>`;
     }
-    let dieClass = lane !== undefined ? `die value-${denomination} lane-${lane} active` : `die value-${denomination}`;
-    let newDieHTML = `
-      <div id="${this.elementID}" class="${dieClass}">${dieDotsHTML}</div>
-    `;
-    // let newDieHTML = `
-    //   <div id="${this.elementID}" class="${dieClass}">D-${denomination}|L${lane !== undefined ? 'L' + lane : ''}-</div>
-    // `;
-    document.querySelector(targetDivQuery).innerHTML += newDieHTML;
-    // document.querySelector(`#${this.elementID}`).innerHTML += `<p class='floating-number'>${this.elementID}</p>`;
-    ;
-    const dieElement = document.querySelector(`#${this.elementID}`)
-    setTimeout(() => {
-      dieElement.classList.add('showing');
-    }, 50);
+    dieDotsHTML = `<div class='die-dot-grid'>` + dieDotsHTML + `</div>`;
+    let dieClass = lane !== undefined ? `die value-${denomination} lane-${lane} active` : `die value-${denomination}`;    
+    let dieHTML = `<div id="${this.elementID}" class="${dieClass}">${dieDotsHTML}</div>`;
+    
+    document.querySelector(targetDivQuery).innerHTML += dieHTML;
+    const dieElement = document.querySelector(`#${this.elementID}`);
+    if (!cube) {
+      setTimeout(() => {
+        dieElement.classList.add('showing');
+      }, 50);
+    } else {
+      dieElement.classList.add('showing', 'options');
+    }
     currentDieID++;
   }
 }
@@ -2214,16 +2151,16 @@ async function playTutorial() {
   }
 
   await pause(500);
-  document.querySelector(`#${attackingDie.elementID}`).classList.add('angry');
+  document.querySelector(`#${attackingDie.elementID}`).classList.add('attacking');
+  document.querySelector(`#${doomedDie.elementID}`).classList.add('attacking');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector(`#${attackingDie.elementID}`).classList.remove('attacking');
+  document.querySelector(`#${doomedDie.elementID}`).classList.remove('attacking');
+  await pause(userPreferences.animationSpeed);
+  document.querySelector(`#${attackingDie.elementID}`).classList.add('attacking');
   document.querySelector(`#${doomedDie.elementID}`).classList.add('angry');
   await pause(userPreferences.animationSpeed);
-  document.querySelector(`#${attackingDie.elementID}`).classList.remove('angry');
-  document.querySelector(`#${doomedDie.elementID}`).classList.remove('angry');
-  await pause(userPreferences.animationSpeed);
-  document.querySelector(`#${attackingDie.elementID}`).classList.add('angry');
-  document.querySelector(`#${doomedDie.elementID}`).classList.add('angry');
-  await pause(userPreferences.animationSpeed);
-  document.querySelector(`#${attackingDie.elementID}`).classList.remove('angry');
+  document.querySelector(`#${attackingDie.elementID}`).classList.remove('attacking');
   destroyDie(`#${doomedDie.elementID}`);
   await pause(userPreferences.animationSpeed);
   document.querySelector('#opponent-area .die-lane-total:nth-child(3)').innerHTML = '4';
