@@ -468,6 +468,37 @@ function assignHandlers() {
     await pause(500);
     document.getElementById('lobby-screen').style.display = 'flex';
   });
+  document.getElementById('rematch-no-button').addEventListener('click', async () => {
+    if (game.singlePlayer) { // to title
+      await reportNewStatus('title');
+      document.getElementById('rematch-modal').classList.remove('showing');
+      document.getElementById('opponent-area').classList.add('dim');
+      document.getElementById('title-screen').classList.remove('hidden');      
+    } else { // to lobby
+      document.getElementById('rematch-message').textContent = 'Returning to lobby...';
+      await reportNewStatus('lobby');
+      await pause(500);
+      document.getElementById('rematch-modal').classList.remove('showing');
+      document.getElementById('lobby-screen').style.display = 'flex';
+      await pause(100);
+      document.getElementById('lobby-screen').classList.remove('hidden')
+      document.getElementById('opponent-area').classList.add('dim');
+    }
+    await pause(userPreferences.animationSpeed);
+    document.getElementById('rematch-modal').style.display = 'none';
+    resetGame();
+  });
+  document.getElementById('rematch-yes-button').addEventListener('click', async () => {
+    if (game.singlePlayer) { 
+      resetGame();
+      document.getElementById('rematch-modal').classList.remove('showing');
+      await pause(userPreferences.animationSpeed);
+      document.getElementById('rematch-modal').style.display = 'none';
+      dealToCPU();
+    } else {
+      document.getElementById('rematch-message').textContent = 'Waiting for opponent...';
+    }
+  });
   document.getElementById('back-to-title-button').addEventListener('click', async () => {
     if (playerState.status === 'ready') {
       lobbyPanel.classList.remove('searching');
@@ -574,6 +605,7 @@ async function populateUserList(initial) {
       let userDieColor = user.preferences.customizations['--die-color'];
       let userDieDotColor = user.preferences.customizations['--die-dot-color'];
       let userDieRadius = user.preferences.customizations['--die-border-radius'];
+      // let userDiePadding = 
       newUserRow.style.setProperty('background-color', userBgColor);
       newUserRow.innerHTML = `
       <div style="font-family: ${userFont}">${nameListing}</div>
@@ -596,6 +628,7 @@ async function populateUserList(initial) {
       });
       newUserRow.prepend(displayDie);
       currentUserElement.appendChild(newUserRow);
+      document.querySelector(`#display-die-${user.visitorID} .die-dot-grid`).style.padding = `calc(10% + (var(--die-size) * ${userDieRadius}) / 7)`;
 
       drawPingBars(`#ping-bars-${user.visitorID}`, user.latency);
 
@@ -680,7 +713,7 @@ const userPreferences = {
 }
 
 // const pollInterval = 1500;
-const pollInterval = 1000;
+const pollInterval = 500;
 
 async function performInitialHandshake(nameEntered) {  
   const firstShakeData = {
@@ -943,6 +976,8 @@ async function callConfirmModal(opponent) {
   modal.style.display = 'flex';
   document.getElementById('player-confirm-name').textContent = playerState.userName;
   document.getElementById('opponent-confirm-name').textContent = opponent.userName;
+  console.log('opponent is', opponent);
+  document.documentElement.style.setProperty('--opponent-username-font', opponent.preferences.customizations['--player-username-font']);
   await pause(50);
   modal.classList.add('showing');
   if (playerState.initiator) {
@@ -1150,6 +1185,11 @@ async function addDieToLane(contestant, denomination, lane, demo) {
       await pause(100);
       document.querySelector(`#${winner}-area.turn-area`).classList.add('won');
       document.querySelector(`#${loser}-area.turn-area`).classList.add('lost');
+      await pause(750);
+      document.getElementById('rematch-modal').style.display = 'flex';
+      await pause(100);
+      document.getElementById('rematch-modal').classList.add('showing');
+
     } else {
       if (contestant === 'player') {
         if (!game.singlePlayer) {
@@ -1610,7 +1650,8 @@ async function getReadyUsers() {
   });
   const usersArray = [...response.data];
   usersArray.forEach((row, i, self) => {
-    self[i] = JSON.parse(row)
+    self[i] = JSON.parse(row);
+    self[i].preferences = JSON.parse(self[i].preferences)
   });
   return usersArray;
 }

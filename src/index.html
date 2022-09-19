@@ -36,18 +36,26 @@
         <div id="confirm-status"></div>
         <div id="player-confirm-display">
           <div class="player-confirm-icon-area">
-            <div id="player-confirm-name">FengShui Cocks</div>
+            <div id="player-confirm-name"></div>
             <i class="fa fa-mobile icon"></i>
           </div>
           <p id="transfer-icon"></i></p>          
           <div class="player-confirm-icon-area">
-            <div id="opponent-confirm-name">FengShui Cocks</div>
+            <div id="opponent-confirm-name"></div>
             <i class="fa fa-mobile icon"></i>
           </div>
           <i id='player-check' class="fa fa-check"></i>
           <i id='opponent-check' class="fa fa-check"></i>
         </div>
         <button disabled id="confirm-game-button">START MATCH</button>
+      </div>
+      <div id="rematch-modal" class="modal">
+        <div id="rematch-header">REMATCH?</div>
+        <div id="rematch-message">Play again?</div>
+        <div class="button-area">
+          <button id="rematch-yes-button"><i class="fa fa-check"></i></button>
+          <button id="rematch-no-button"><i class="fa fa-times"></i></button>
+        </div>
       </div>
       <div id="options-screen">
         <div id="options-header">Options</div>
@@ -98,7 +106,7 @@
             <div id="radius-options-area" class="option-row">
               <div>Die roundness</div>
               <div>
-                <input id="die-radius-slider" value="0.12" min=".04" max=".38" step=".01" class="slider" type="range" />
+                <input id="die-radius-slider" value="0.12" min=".04" max=".4" step=".01" class="slider" type="range" />
               </div>
             </div>
             <div id="demo-area" class="option-row">
