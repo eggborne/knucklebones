@@ -1,16 +1,17 @@
 Visitor can enter a game by:
 
 (INITIATOR): clicking Find Game button when at least one other user is already listed as "ready" 
-Finds an opponent instantly, never appears in list as "ready"
-Confirms opponent match by finding a user directly by ID
-Associates with game by creating a ‘game-sessions’ table with INITIATOR’s and RESPONDENT’s IDs
-Waits for RESPONDENT to find the table while polling
+* Finds an opponent instantly, never appears in list as "ready"
+* Confirms opponent match by finding a user directly by ID
+* Associates with game by creating a ‘game-sessions’ table with INITIATOR’s and RESPONDENT’s IDs
+* Waits for RESPONDENT to find the table while polling
 
 (RESPONDENT): being a listed "ready" user who is found by an INITIATOR
- Waits in lobby with status "ready”
-Confirms opponent match by finding a game session with RESPONDENT’S ID in it
- Associates with game by polling 'game-sessions' list for a session with RESPONDENT’s ID in it
-If found, changes status to “confirming” and is found by INITIATOR
+* Waits in lobby with status "ready”
+* Confirms opponent match by finding a game session with RESPONDENT’S ID in it
+* Associates with game by polling 'game-sessions' list for a session with RESPONDENT’s ID in it
+* If found, changes status to “confirming” and is found by INITIATOR
+
 
 1. Visitor clicks Enter Lobby
 2. Lobby screen is revealed
