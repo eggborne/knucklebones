@@ -13,17 +13,17 @@ Confirms opponent match by finding a game session with RESPONDENT’S ID in it
 If found, changes status to “confirming” and is found by INITIATOR
 
 1. Visitor clicks Enter Lobby
-Lobby screen is revealed
-Visitor handshakes with chosen name and default status "lobby"
-Establishes visitorID and local storage if no local storage found
-Begins to handshake and poll regularly for users and chat messages
-never stops handshaking
-stops polling users and chat when status not "lobby" or "ready"
+2. Lobby screen is revealed
+3. Visitor handshakes with chosen name and default status "lobby"
+4. Establishes visitorID and local storage if no local storage found
+5. Begins to handshake and poll regularly for users and chat messages
+* never stops handshaking
+* stops polling users and chat when status not "lobby" or "ready"
 
-2.In lobby,  Visitor clicks Find Game button
-Checks user list for users with "ready" status…
+* In lobby,  Visitor clicks Find Game button
+* Checks user list for users with "ready" status…
 
-If a  ready user is NOT found by Visitor on first poll:
+If a ready user is NOT found by Visitor on first poll:
 
 Visitor is a RESPONDENT
 
